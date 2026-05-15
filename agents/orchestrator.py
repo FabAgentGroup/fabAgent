@@ -1,20 +1,36 @@
-"""4-Tier 멀티에이전트 오케스트레이터 (M2에서 구현)
+"""4-Tier 멀티에이전트 오케스트레이터
 
 run_orchestrator()가 detection -> cause -> impact -> response 순으로
 서브에이전트를 호출하고 각 결과를 core.schema.TierData로 합쳐 반환
 
-설계 원칙: 특정 알람(A1)에 하드코딩하지 말 것
-알람의 공정 타입(Photo/Etch/CMP)을 받아 처리하는 일반 함수로 만들면
-core.pipeline.REAL_AGENT_ALARMS에 ID만 추가해 다른 알람도 확장 가능
+각 Tier가 이전 Tier의 출력을 입력으로 받는 고정 의존 순서이므로
+별도 LLM 라우터 없이 결정론적으로 시퀀싱 (속도/비용/예측성 모두 유리)
 
-모델: 서브에이전트 = GPT-5 mini, 오케스트레이터 = GPT-5 (OpenAI SDK)
-
-현재는 스텁, demo.py 데이터를 그대로 반환해 프론트가 M1부터 동작하게 함
+LLM 3회 호출이 직렬로 일어나 첫 호출은 1분 안팎이 걸리므로
+프로세스 내 결과 캐시로 동일 알람 재호출 시 즉시 응답하게 함
 """
+from functools import lru_cache
+
+from agents.cause import run_cause
+from agents.detection import run_detection
+from agents.impact import run_impact
+from agents.response import run_response
 from core.schema import TierData
-from data import demo
+from data.demo import DEFAULT_ALARMS
 
 
+def _find_alarm(alarm_id: str) -> dict:
+    for a in DEFAULT_ALARMS:
+        if a["id"] == alarm_id:
+            return a
+    raise ValueError(f"알람 ID를 찾을 수 없음: {alarm_id}")
+
+
+@lru_cache(maxsize=8)
 def run_orchestrator(alarm_id: str) -> TierData:
-    # TODO(M2/M3) detection->cause->impact->response 서브에이전트 호출로 교체
-    return demo.TIER_DATA[alarm_id]
+    alarm = _find_alarm(alarm_id)
+    tier1 = run_detection(alarm)
+    tier2 = run_cause(alarm, tier1)
+    tier3 = run_impact(alarm, tier1, tier2)
+    tier4 = run_response(alarm, tier1, tier2, tier3)
+    return {"tier1": tier1, "tier2": tier2, "tier3": tier3, "tier4": tier4}
