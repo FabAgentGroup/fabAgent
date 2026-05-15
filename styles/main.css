@@ -1,0 +1,42 @@
+/* FabAgent 전체 스타일
+   TODO(M1 / feat/css-port): 디자인 프로토타입의 styles.css 전체를 여기에 그대로 복사
+   토큰/간격/애니메이션이 모두 그 안에 검증돼 있으므로 다시 작성하지 말 것
+   아래는 디자인 토큰 :root + Streamlit 기본 요소 숨김만 미리 둔 시작점 */
+
+:root {
+  --text-primary: #1F2A3A;
+  --text-secondary: #6B7788;
+  --text-tertiary: #9AA3B2;
+  --bg-page: #FAFBFC;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F4F6F9;
+  --border: #E3E6EC;
+  --brand: #2C5AB8;     /* Tier 1 파랑 */
+  --t2-text: #6E46A8;   /* Tier 2 보라 */
+  --t3-text: #2A8A55;   /* Tier 3 초록 */
+  --t4-text: #B07718;   /* Tier 4 앰버 */
+  --crit-text: #C04A6E; /* 긴급 핑크 */
+}
+
+/* Streamlit 기본 요소 숨기기 */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header[data-testid="stHeader"] { display: none; }
+
+/* 상단 여백 제거 + 폭 제한 해제 */
+.block-container {
+  padding-top: 1rem;
+  padding-bottom: 4rem;
+  max-width: none;
+}
+
+/* 사이드바 너비 320px 고정 */
+section[data-testid="stSidebar"] {
+  width: 320px !important;
+  min-width: 320px !important;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+}
+section[data-testid="stSidebar"] > div {
+  padding-top: 0;
+}
