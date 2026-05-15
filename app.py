@@ -34,6 +34,27 @@ def inject_css():
     )
 
 
+def handle_query_params():
+    # 사이드바 FabAgent 로고 클릭 -> ?reset=1로 진입 -> 세션 초기화
+    if "reset" in st.query_params:
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        del st.query_params["reset"]
+        return
+
+    # 알람 카드 클릭 -> ?alarm=X로 진입 -> 선택 알람 변경
+    if "alarm" in st.query_params:
+        alarm_id = st.query_params["alarm"]
+        ss = st.session_state
+        if alarm_id != ss.get("selected_alarm_id"):
+            ss.selected_alarm_id = alarm_id
+            ss.stage = 0
+            ss.completed_tiers = set()
+            ss.approved = False
+            ss.animation_pending = True
+        del st.query_params["alarm"]
+
+
 def init_state():
     ss = st.session_state
     ss.setdefault("selected_alarm_id", "A1")
@@ -86,6 +107,7 @@ def render_main():
 
 
 inject_css()
+handle_query_params()
 init_state()
 render_alarm_inbox()
 render_main()

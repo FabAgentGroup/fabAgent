@@ -18,8 +18,12 @@ header[data-testid="stHeader"] { display: none; }
 section[data-testid="stSidebar"] {
   width: 320px !important;
   min-width: 320px !important;
+  max-width: 320px !important;
   background: var(--bg-card);
   border-right: 1px solid var(--border);
+  transform: translateX(0) !important;
+  visibility: visible !important;
+  display: block !important;
 }
 section[data-testid="stSidebar"] > div {
   padding-top: 0;
@@ -27,24 +31,33 @@ section[data-testid="stSidebar"] > div {
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
   padding: 0;
 }
+/* 사이드바 상단 빈 헤더(collapse 버튼 자리) 자체를 제거해 로고가 최상단에 붙도록 */
+section[data-testid="stSidebar"] [data-testid="stSidebarHeader"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+  display: none !important;
+}
 
 /* Streamlit이 위젯 사이에 자동으로 끼우는 간격 축소 */
 [data-testid="stVerticalBlock"] { gap: 0.4rem; }
 
-/* 사이드바 알람 카드 아래의 Streamlit 버튼은 카드와 한 덩어리로 보이게 */
-section[data-testid="stSidebar"] .stButton button {
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 11px;
-  padding: 6px 14px;
-  margin-top: -6px;
-  text-align: left;
+/* 알람 카드 전체를 클릭 영역으로, <a> 래퍼는 시각적으로 투명 */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+  gap: 0 !important;
 }
-section[data-testid="stSidebar"] .stButton button:hover {
-  background: var(--bg-subtle);
-  color: var(--brand);
+a.alarm-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  margin-top: 12px;
+}
+a.alarm-card-link:last-of-type {
+  margin-bottom: 16px;
+}
+a.alarm-card-link:focus,
+a.alarm-card-link:focus-visible {
+  outline: none;
 }
 
 :root {
@@ -227,6 +240,39 @@ html, body {
   place-items: center;
 }
 
+/* ============== Sidebar — Logo (home) ============== */
+
+a.fab-sidebar-logo-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.fab-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--brand);
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+.fab-sidebar-logo .fab-logo-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+}
+.fab-sidebar-logo .fab-logo-mark svg {
+  width: 22px;
+  height: 22px;
+}
+.fab-sidebar-logo:hover {
+  background: var(--bg-subtle);
+}
+
 /* ============== Sidebar — Alarm Inbox ============== */
 
 .fab-sidebar-head {
@@ -264,12 +310,16 @@ html, body {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 8px;
   padding: 14px 14px 14px 16px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
   overflow: hidden;
   margin: 0 12px;
+}
+a.alarm-card-link:hover .alarm-card {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card);
 }
 
 .alarm-card:hover {
