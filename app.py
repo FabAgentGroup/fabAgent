@@ -45,13 +45,36 @@ def init_state():
     ss.setdefault("speed", "normal")  # "fast" | "normal" | "real"
 
 
+def _current_alarm():
+    ss = st.session_state
+    for a in ss.alarms:
+        if a["id"] == ss.selected_alarm_id:
+            return a
+    return None
+
+
 def render_main():
     render_header()
 
+    alarm = _current_alarm()
+    title_text = alarm["title"] if alarm else "알람을 선택하세요"
+    lot_id = alarm["lot_id"] if alarm else "-"
+
     col_title, col_progress = st.columns([5, 4])
     with col_title:
-        # TODO(M1) 메인 타이틀 + 4-Tier 워크플로우 서브텍스트
-        st.markdown("<!-- TODO(M1): 메인 타이틀 -->", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <h1 class="fab-main-title">
+              {title_text} — <span style="font-family:var(--mono); font-weight:700;">{lot_id}</span>
+            </h1>
+            <div class="fab-main-sub">
+              <span>4-Tier 분석 워크플로우</span>
+              <span class="sep">·</span>
+              <span>이상 탐지 → 원인 분석 → 영향 평가 → 대응 권고</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     with col_progress:
         render_progress_strip()
 
