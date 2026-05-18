@@ -1,11 +1,15 @@
-"""RAG 도메인 지식 검색
+"""RAG 도메인 지식 검색 - 키워드 매칭 + FAISS 벡터 백엔드 디스패치
 
 knowledge/ 의 마크다운 문서(INC-*, FMEA-*, SOP-* 등)를 검색해
-원인 분석(Tier 2)·대응 권고(Tier 4) 에이전트에 근거를 제공
+원인 분석(Tier 2)·대응 권고(Tier 4) 에이전트에 근거를 제공한다.
 
-문서가 소수라 벡터DB는 오버스펙, 키워드 매칭으로 충분
+기본은 키워드 매칭 (작은 코퍼스에 빠르고 정확)
+환경 변수 RAG_BACKEND=faiss 설정 시 sentence-transformer + FAISS 벡터 검색으로
+교체 (의미 유사도, 동의어 처리에 우위, 코퍼스 확장 시 유리)
+
 파일명이 곧 citation ID (예: INC-2024-0312.md -> "INC-2024-0312")
 """
+import os
 import re
 from pathlib import Path
 
@@ -28,8 +32,8 @@ def _knowledge_docs() -> dict[str, str]:
     return docs
 
 
-def search(query: str, top_k: int = 3) -> list[str]:
-    """쿼리와 관련된 문서 ID를 키워드 매칭으로 반환, 관련도 내림차순"""
+def keyword_search(query: str, top_k: int = 3) -> list[str]:
+    """키워드 매칭 - 쿼리 단어가 문서 본문에 등장하는 빈도 합계로 랭킹"""
     keywords = [w for w in re.split(r"\W+", query.lower()) if len(w) >= 2]
     scored = []
     for doc_id, text in _knowledge_docs().items():
@@ -39,3 +43,12 @@ def search(query: str, top_k: int = 3) -> list[str]:
             scored.append((doc_id, hits))
     scored.sort(key=lambda x: -x[1])
     return [doc_id for doc_id, _ in scored[:top_k]]
+
+
+def search(query: str, top_k: int = 3) -> list[str]:
+    """기본 검색 진입점, 환경변수 RAG_BACKEND로 백엔드 전환"""
+    if os.getenv("RAG_BACKEND", "keyword").lower() == "faiss":
+        from agents.rag.faiss_store import faiss_search
+
+        return faiss_search(query, top_k)
+    return keyword_search(query, top_k)

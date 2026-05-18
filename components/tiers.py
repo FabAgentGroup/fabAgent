@@ -134,12 +134,23 @@ def _render_action_bar():
 def _on_approve():
     ss = st.session_state
     ss.approved = True
+
+    # 자가 학습 - 현재 알람의 분석 결과를 knowledge로 자동 기록
+    alarm = next((a for a in ss.alarms if a["id"] == ss.selected_alarm_id), None)
+    work_order = f"W-{datetime.now():%Y%m%d}-{ss.selected_alarm_id[1:].zfill(3)}"
+    if alarm:
+        from agents.rag.learn import record_incident
+        tier_data = get_tier_data(ss.selected_alarm_id)
+        if tier_data:
+            record_incident(alarm, tier_data, work_order)
+
+    # 알람 상태 업데이트
     for a in ss.alarms:
         if a["id"] == ss.selected_alarm_id:
             a["status"] = "done"
             a["time"] = "방금 전"
             break
-    work_order = f"W-{datetime.now():%Y%m%d}-001"
+
     st.toast(
         f"✓ 작업 지시서 {work_order} 생성 완료 · 인시던트 DB 자동 기록",
         icon="✅",
