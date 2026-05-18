@@ -92,11 +92,23 @@ def _assistant_msg_dict(msg) -> dict:
     return out
 
 
-def run_cause(alarm: dict, tier1: Tier1, trace: dict | None = None) -> Tier2:
-    """원인 분석을 agentic RAG로 실행, trace dict 전달 시 호출 메타 기록"""
+def run_cause(
+    alarm: dict, tier1: Tier1, trace: dict | None = None, retry_hint: bool = False
+) -> Tier2:
+    """원인 분석을 agentic RAG로 실행
+
+    retry_hint=True 면 직전 분석의 기여도가 낮았다는 신호를 prompt에 추가해
+    더 적극적으로 도구를 호출하도록 유도 (orchestrator의 confidence retry용)
+    """
+    user_prompt = _initial_user_prompt(alarm, tier1)
+    if retry_hint:
+        user_prompt += (
+            "\n\n[재시도 신호] 직전 분석에서 최상위 원인의 기여도가 낮게 산정되었습니다. "
+            "도구를 더 적극적으로(다양한 쿼리·증상 키워드로 여러 번) 호출해 더 강한 근거를 모으세요."
+        )
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": _initial_user_prompt(alarm, tier1)},
+        {"role": "user", "content": user_prompt},
     ]
     tool_call_log: list[dict] = []
     iterations = 0
