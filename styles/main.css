@@ -507,6 +507,71 @@ a.alarm-card-link:hover .alarm-card {
   width: 12px; height: 1px; background: var(--border);
 }
 
+/* ============== Loading state (cold start) ============== */
+
+.fab-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 40px 20px;
+  text-align: center;
+  animation: card-fade-in 0.3s ease;
+}
+.fab-loading-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid var(--bg-subtle);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 22px;
+}
+.fab-loading-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+.fab-loading-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 26px;
+}
+.fab-loading-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+}
+.fab-loading-pipeline .step {
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+}
+.fab-loading-pipeline .step.t1 { color: var(--t1-text); background: var(--t1-bg); }
+.fab-loading-pipeline .step.t2 { color: var(--t2-text); background: var(--t2-bg); }
+.fab-loading-pipeline .step.t3 { color: var(--t3-text); background: var(--t3-bg); }
+.fab-loading-pipeline .step.t4 { color: var(--t4-text); background: var(--t4-bg); }
+.fab-loading-pipeline .arrow {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.fab-loading-hint {
+  margin-top: 22px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* ============== Empty state ============== */
 
 .fab-empty {
@@ -579,13 +644,42 @@ a.alarm-card-link:hover .alarm-card {
 .tier-head-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .tier-name {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+/* 에이전트 페르소나 (Tier head 안) */
+.agent-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.agent-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.agent-summary {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.agent-tool {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
 }
 
 .tier-status {
@@ -796,6 +890,29 @@ a.alarm-card-link:hover .alarm-card {
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+/* PHM 실측 시계열 차트 (Tier 1, A3 한정) */
+.phm-chart {
+  margin-top: 14px;
+  padding: 12px 14px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.phm-chart-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.phm-chart img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
 }
 
 /* ============== Tier 2 body ============== */
@@ -1154,19 +1271,133 @@ a.alarm-card-link:hover .alarm-card {
   color: var(--text-primary);
 }
 
-/* Tier 4 액션 바 안의 Streamlit 버튼 스타일 */
-.stButton button[kind="primary"] {
+/* ============== Tier 4 액션 바 ============== */
+
+.action-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.action-bar-head .label {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+/* 메인 영역 Streamlit 버튼 통일 스타일 (Tier 4 액션 바) */
+.block-container .stButton button {
+  height: 48px !important;
+  border-radius: 10px !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  padding: 0 22px !important;
+  transition: all 0.15s !important;
+  letter-spacing: -0.01em;
+}
+
+/* primary = 승인 (초록 fill) */
+.block-container .stButton button[kind="primary"] {
   background: var(--ok) !important;
   border-color: var(--ok) !important;
-  height: 40px !important;
-  border-radius: 8px !important;
-  font-weight: 700 !important;
-  box-shadow: 0 1px 2px rgba(42,138,85,0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(42,138,85,0.3), inset 0 1px 0 rgba(255,255,255,0.18) !important;
 }
-.stButton button[kind="primary"]:hover {
+.block-container .stButton button[kind="primary"]:hover:not(:disabled) {
   background: #237046 !important;
   border-color: #237046 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(42,138,85,0.4) !important;
 }
+.block-container .stButton button[kind="primary"]:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+/* secondary = 거절/보류 기본 outline */
+.block-container .stButton button[kind="secondary"] {
+  background: var(--bg-card) !important;
+  border: 1.5px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+}
+.block-container .stButton button[kind="secondary"]:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+.block-container .stButton button[kind="secondary"]:hover:not(:disabled) {
+  background: var(--bg-subtle) !important;
+  border-color: var(--text-secondary) !important;
+  color: var(--text-primary) !important;
+  transform: translateY(-1px);
+}
+
+/* ============== 운영자 결정 결과 카드 ============== */
+
+.action-result {
+  margin-top: 18px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  animation: card-fade-in 0.35s ease;
+}
+.action-result-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  flex-shrink: 0;
+  color: white;
+}
+.action-result-body { flex: 1; line-height: 1.5; }
+.action-result-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.action-result-meta {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.action-result-meta code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(31,42,58,0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.action-result.approved {
+  background: var(--t3-bg);
+  border-color: var(--t3-border);
+}
+.action-result.approved .action-result-icon { background: var(--ok); }
+.action-result.approved .action-result-title { color: var(--t3-text); }
+
+.action-result.held {
+  background: var(--t4-bg);
+  border-color: var(--t4-border);
+}
+.action-result.held .action-result-icon { background: var(--warn); }
+.action-result.held .action-result-title { color: var(--t4-text); }
+
+.action-result.rejected {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+.action-result.rejected .action-result-icon { background: var(--text-secondary); }
+.action-result.rejected .action-result-title { color: var(--text-primary); }
 
 .live-tick {
   display: inline-flex;

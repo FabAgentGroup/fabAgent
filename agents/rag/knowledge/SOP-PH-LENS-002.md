@@ -1,4 +1,4 @@
-# SOP-PH-LENS-002 — 렌즈 PM 표준 절차
+# SOP-PH-LENS-002 - 렌즈 PM 표준 절차
 
 ## 목적
 

@@ -28,6 +28,31 @@ SPEED_PRESETS = {
 
 TIER_NAMES = {1: "이상 탐지", 2: "원인 분석", 3: "공정 간 영향 평가", 4: "대응 권고"}
 
+# 각 Tier의 에이전트 페르소나 + 활동 요약 (loading=False일 때만 활성)
+AGENT_PERSONA = {
+    1: {"name": "Detection Agent", "tool": "IsolationForest · SECOM/PHM"},
+    2: {"name": "Cause Agent", "tool": "GPT-5-mini · RAG 검색"},
+    3: {"name": "Impact Agent", "tool": "GPT-5-mini · RAG + WIP 결합"},
+    4: {"name": "Response Agent", "tool": "GPT-5-mini · RAG + 근거 추출"},
+}
+
+
+def _agent_summary(tier_num: int, data) -> str:
+    """Tier별 에이전트 활동 1줄 요약, data가 None이면 분석 중 메시지"""
+    if data is None:
+        return "분석 중..."
+    if tier_num == 1:
+        return f"{len(data['features'])}개 기여 센서 검출 (이상 점수 {data['score']})"
+    if tier_num == 2:
+        cites = sum(len(c["citations"]) for c in data["causes"])
+        return f"사내 문서 {cites}건 인용해 원인 {len(data['causes'])}개 추정"
+    if tier_num == 3:
+        return f"의존성 + WIP 결합해 예상 수율 손실 {data['yield_loss']} %p 추정"
+    if tier_num == 4:
+        return f"근거 {len(data['refs'])}건 인용해 즉시 {len(data['immediate'])}건 · 중장기 {len(data['longterm'])}건 권고"
+    return ""
+
+
 BODY_BUILDERS = {
     1: tier_1_body_html,
     2: tier_2_body_html,
@@ -36,9 +61,34 @@ BODY_BUILDERS = {
 }
 
 
+LOADING_HTML = """
+<div class="fab-loading">
+  <div class="fab-loading-spinner"></div>
+  <h3 class="fab-loading-title">4-Tier 멀티 에이전트 분석 진행 중</h3>
+  <div class="fab-loading-subtitle">알람을 분석하기 위해 4단계 에이전트가 순차 실행됩니다</div>
+  <div class="fab-loading-pipeline">
+    <span class="step t1">Tier 1 이상 탐지</span>
+    <span class="arrow">→</span>
+    <span class="step t2">Tier 2 원인 분석</span>
+    <span class="arrow">→</span>
+    <span class="step t3">Tier 3 영향 평가</span>
+    <span class="arrow">→</span>
+    <span class="step t4">Tier 4 대응 권고</span>
+  </div>
+  <div class="fab-loading-hint">첫 호출은 LLM 3회 직렬로 약 60초 소요됩니다 · 이후 동일 알람은 캐시로 즉시 응답</div>
+</div>
+"""
+
+
 def render_tier_cascade():
     ss = st.session_state
-    data = get_tier_data(ss.selected_alarm_id)
+    # 첫 호출 시 LLM 3회 직렬로 약 60초, 사용자 안내를 위해 로딩 카드 먼저 렌더
+    loading_slot = st.empty()
+    loading_slot.html(LOADING_HTML)
+    try:
+        data = get_tier_data(ss.selected_alarm_id)
+    finally:
+        loading_slot.empty()
 
     if data is None:
         st.markdown(
@@ -92,19 +142,25 @@ def _run_sequence(data):
 def render_tier(tier_num: int, data, loading: bool, with_actions: bool = False):
     """Tier 카드 한 덩어리를 단일 markdown으로 렌더, Tier 4 액션 바만 별도 위젯"""
     status_html = (
-        '<div class="tier-status"><span class="spinner"></span>분석 중…</div>'
+        '<div class="tier-status"><span class="spinner"></span>실행 중...</div>'
         if loading
-        else '<div class="tier-status"><span class="check">✓</span>방금</div>'
+        else '<div class="tier-status"><span class="check">✓</span>완료</div>'
     )
     body_html = skeleton_html(tier_num) if loading else BODY_BUILDERS[tier_num](data)
+    p = AGENT_PERSONA[tier_num]
+    summary = _agent_summary(tier_num, None if loading else data)
 
-    # st.html을 쓰면 markdown 파서를 거치지 않아 들여쓰기 4칸 짜리 라인이 코드블록으로 변하지 않음
     st.html(
         f'<section class="tier-card tier-{tier_num}">'
         f'<div class="tier-head">'
         f'<div class="tier-head-left">'
-        f'<span class="chip chip-t{tier_num}">Tier {tier_num}</span>'
-        f'<span class="tier-name">{TIER_NAMES[tier_num]}</span>'
+        f'<div class="agent-id">'
+        f'<div class="agent-name-row">'
+        f'<span class="agent-name">{p["name"]}</span>'
+        f'<span class="chip chip-t{tier_num}">Tier {tier_num} · {TIER_NAMES[tier_num]}</span>'
+        f'</div>'
+        f'<div class="agent-summary">{summary} · <span class="agent-tool">{p["tool"]}</span></div>'
+        f'</div>'
         f'</div>'
         f'{status_html}'
         f'</div>'
@@ -118,17 +174,69 @@ def render_tier(tier_num: int, data, loading: bool, with_actions: bool = False):
 
 def _render_action_bar():
     ss = st.session_state
-    c1, c2, c3, _ = st.columns([1, 1, 2.2, 4])
+
+    st.markdown(
+        '<div class="action-bar-head">'
+        '<span class="label">운영자 결정</span>'
+        '<span>권고서를 검토하고 액션을 선택하세요</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 양쪽 spacer로 가운데 정렬
+    _, c1, c2, c3, _ = st.columns([2.5, 1, 1, 2.2, 2.5])
     with c1:
-        if st.button("✗ 거절", key="btn-reject", disabled=ss.approved):
-            st.toast("권고 거절됨, 사유 수집 모달(MVP 범위 외)", icon="✗")
+        if st.button("거절", key="btn-reject", disabled=ss.approved, use_container_width=True):
+            _on_reject()
     with c2:
-        if st.button("⏸ 보류", key="btn-hold", disabled=ss.approved):
-            st.toast("권고 보류됨, 5분 후 재발생 예정", icon="⏸")
+        if st.button("보류", key="btn-hold", disabled=ss.approved, use_container_width=True):
+            _on_hold()
     with c3:
-        label = "✓ 작업지시서 생성됨" if ss.approved else "✓ 승인 및 작업지시서 생성"
-        if st.button(label, key="btn-approve", disabled=ss.approved, type="primary"):
+        label = "작업지시서 생성됨" if ss.approved else "승인 및 작업지시서 생성"
+        if st.button(label, key="btn-approve", disabled=ss.approved, type="primary", use_container_width=True):
             _on_approve()
+
+    _render_action_result()
+
+
+def _render_action_result():
+    ss = st.session_state
+    act = ss.get("last_action")
+    if not act:
+        return
+    kind = act["type"]
+    icon = {"approved": "✓", "held": "⏸", "rejected": "✗"}[kind]
+    title = act["title"]
+    meta = act["meta"]
+    st.html(
+        f'<div class="action-result {kind}">'
+        f'<div class="action-result-icon">{icon}</div>'
+        f'<div class="action-result-body">'
+        f'<div class="action-result-title">{title}</div>'
+        f'<div class="action-result-meta">{meta}</div>'
+        f'</div>'
+        f'</div>'
+    )
+
+
+def _on_reject():
+    st.session_state.last_action = {
+        "type": "rejected",
+        "title": "권고 거절",
+        "meta": "사유 수집 모달은 MVP 범위 외, 후속 분석에 반영하려면 사유 입력 후 인시던트 DB에 기록 필요",
+    }
+    st.toast("권고 거절됨", icon="❌")
+    st.rerun()
+
+
+def _on_hold():
+    st.session_state.last_action = {
+        "type": "held",
+        "title": "권고 보류",
+        "meta": "5분 후 동일 알람이 재발생 예정, 추가 데이터 확보 후 재검토 권장",
+    }
+    st.toast("권고 보류됨", icon="⏸️")
+    st.rerun()
 
 
 def _on_approve():
@@ -138,11 +246,13 @@ def _on_approve():
     # 자가 학습 - 현재 알람의 분석 결과를 knowledge로 자동 기록
     alarm = next((a for a in ss.alarms if a["id"] == ss.selected_alarm_id), None)
     work_order = f"W-{datetime.now():%Y%m%d}-{ss.selected_alarm_id[1:].zfill(3)}"
+    incident_doc = ""
     if alarm:
         from agents.rag.learn import record_incident
         tier_data = get_tier_data(ss.selected_alarm_id)
         if tier_data:
-            record_incident(alarm, tier_data, work_order)
+            path = record_incident(alarm, tier_data, work_order)
+            incident_doc = path.name
 
     # 알람 상태 업데이트
     for a in ss.alarms:
@@ -151,8 +261,17 @@ def _on_approve():
             a["time"] = "방금 전"
             break
 
+    ss.last_action = {
+        "type": "approved",
+        "title": "승인 완료, 작업지시서 발행",
+        "meta": (
+            f"작업지시서 <code>{work_order}</code> 생성 · "
+            f"인시던트 DB <code>{incident_doc}</code> 자동 기록 · "
+            "사이드바 알람 상태가 [완료]로 전환되었습니다"
+        ),
+    }
     st.toast(
-        f"✓ 작업 지시서 {work_order} 생성 완료 · 인시던트 DB 자동 기록",
+        f"✓ 작업 지시서 {work_order} 생성 · 인시던트 DB 자동 기록",
         icon="✅",
     )
     st.rerun()

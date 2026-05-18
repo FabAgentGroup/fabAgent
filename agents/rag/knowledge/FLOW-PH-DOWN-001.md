@@ -1,4 +1,4 @@
-# FLOW-PH-DOWN-001 — Photo 공정 하류 의존성과 수율 영향
+# FLOW-PH-DOWN-001 - Photo 공정 하류 의존성과 수율 영향
 
 ## 공정 흐름
 

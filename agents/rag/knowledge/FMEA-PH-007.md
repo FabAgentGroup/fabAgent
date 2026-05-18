@@ -1,4 +1,4 @@
-# FMEA-PH-007 — Photo 공정 실패 모드 분석
+# FMEA-PH-007 - Photo 공정 실패 모드 분석
 
 ## 대상
 

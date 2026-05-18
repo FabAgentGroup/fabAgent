@@ -17,17 +17,11 @@ def render_alarm_inbox():
         critical_count = sum(1 for a in ss.alarms if a["status"] == "critical")
         total = len(ss.alarms)
         badge = f'<span class="badge">긴급 {critical_count}</span>' if critical_count else ""
-        st.markdown(
-            f"""
-            <div class="fab-sidebar-head">
-              <div class="fab-sidebar-title">알람 인박스</div>
-              <div class="fab-sidebar-count">
-                {badge}
-                <span>전체 {total}건</span>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.html(
+            f'<div class="fab-sidebar-head">'
+            f'<div class="fab-sidebar-title">알람 인박스</div>'
+            f'<div class="fab-sidebar-count">{badge}<span>전체 {total}건</span></div>'
+            f'</div>'
         )
 
         for alarm in ss.alarms:
