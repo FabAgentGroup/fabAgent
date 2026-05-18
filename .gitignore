@@ -11,3 +11,4 @@ CLAUDE.md
 .claude/
 .mcp.json
 data/secom/raw/*.data
+data/phm2016/raw/

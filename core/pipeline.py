@@ -10,7 +10,7 @@ from core.schema import TierData
 from data import demo
 
 # LLM 멀티에이전트로 처리할 알람
-REAL_AGENT_ALARMS = {"A1"}
+REAL_AGENT_ALARMS = {"A1", "A2", "A3"}
 
 
 def get_tier_data(alarm_id: str) -> TierData | None:
