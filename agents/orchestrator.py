@@ -18,6 +18,7 @@ from functools import lru_cache
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langsmith import traceable
 
 from agents.cause import run_cause
 from agents.detection import run_detection
@@ -119,6 +120,7 @@ def _find_alarm(alarm_id: str) -> dict:
     raise ValueError(f"알람 ID를 찾을 수 없음: {alarm_id}")
 
 
+@traceable(name="FabAgent_Orchestrator", run_type="chain")
 @lru_cache(maxsize=8)
 def run_orchestrator(alarm_id: str) -> TierData:
     alarm = _find_alarm(alarm_id)

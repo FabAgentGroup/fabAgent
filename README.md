@@ -216,6 +216,22 @@ CRAG_ENABLED=true streamlit run app.py    # 기본값 - retrieval grader + 자�
 CRAG_ENABLED=false streamlit run app.py   # 비활성 - latency critical 시나리오
 ```
 
+### LangSmith Observability (선택)
+
+모든 LLM·tool·agent 호출이 [LangSmith](https://smith.langchain.com) 대시보드로 자동 전송됩니다.
+
+```bash
+# .env 에 추가 (https://smith.langchain.com 에서 API 키 발급)
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_pt_...
+LANGSMITH_PROJECT=fabagent
+```
+
+활성 시:
+- `wrap_openai`가 모든 `chat.completions.create` 호출을 자동 트레이스 (Tier 2/3/4 agent, CRAG grader, RAGAS 평가 등)
+- `@traceable` 데코레이터로 4-Tier orchestrator·각 agent·tool dispatcher를 nested run으로 시각화
+- production observability: 알람별 latency / 비용 / tool 호출 트리 / error 추적
+
 ### Hugging Face Spaces 배포
 
 1. HF Space 생성 (SDK: Streamlit)

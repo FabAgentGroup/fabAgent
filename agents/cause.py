@@ -11,6 +11,8 @@ LLM이 도구를 자율 호출해 컨텍스트를 수집한 뒤 원인을 추정
 """
 import json
 
+from langsmith import traceable
+
 from agents.llm import SUBAGENT_MODEL, client
 from agents.tools import TOOLS_CAUSE, dispatch_tool
 from agents.tools.equipment import ALARM_EQUIPMENT
@@ -92,6 +94,7 @@ def _assistant_msg_dict(msg) -> dict:
     return out
 
 
+@traceable(name="Tier2_Cause_Agent", run_type="chain")
 def run_cause(
     alarm: dict, tier1: Tier1, trace: dict | None = None, retry_hint: bool = False
 ) -> Tier2:

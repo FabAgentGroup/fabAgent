@@ -7,6 +7,8 @@ LLM이 도구를 자율 호출해 SOP·과거 incident·PM 윈도우를 모은 �
 """
 import json
 
+from langsmith import traceable
+
 from agents.cause import _assistant_msg_dict
 from agents.llm import SUBAGENT_MODEL, client
 from agents.rag.store import load_document
@@ -114,6 +116,7 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3) 
 필요한 SOP·과거 해결책·PM 윈도우는 도구를 호출해 자율적으로 수집하세요."""
 
 
+@traceable(name="Tier4_Response_Agent", run_type="chain")
 def run_response(
     alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3, trace: dict | None = None
 ) -> Tier4:
