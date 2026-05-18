@@ -6,14 +6,20 @@ config:
 graph TD;
 	__start__([<p>__start__</p>]):::first
 	detect(detect)
+	noise(noise)
 	cause(cause)
+	cause_retry(cause_retry)
 	impact(impact)
 	response(response)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> detect;
-	cause --> impact;
-	detect --> cause;
+	cause -.-> cause_retry;
+	cause -.-> impact;
+	cause_retry --> impact;
+	detect -.-> cause;
+	detect -.-> noise;
 	impact --> response;
+	noise --> __end__;
 	response --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
