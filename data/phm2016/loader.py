@@ -19,6 +19,8 @@ import pandas as pd
 RAW_DIR = Path(__file__).parent / "raw"
 TRAIN_TRAJ_DIR = RAW_DIR / "CMP-data" / "training"
 TRAIN_LABEL = RAW_DIR / "CMP-training-removalrate.csv"
+# 사전 집계 캐시 (배포용, ~400KB) - raw 없이도 동작
+CACHED_FEATURES = Path(__file__).parent / "phm_cmp_features.csv"
 
 # 집계 대상 센서 컬럼, 진짜 의미 있는 이름들
 SENSOR_COLS = [
@@ -46,19 +48,32 @@ SENSOR_COLS = [
 
 @lru_cache(maxsize=1)
 def load_phm_cmp() -> tuple[pd.DataFrame, pd.Series]:
-    """trajectory 전체를 (WAFER_ID, STAGE)별로 평균 집계해 wafer-stage 단위 feature 반환
+    """캐시 CSV가 있으면 그걸 사용, 없으면 raw trajectory 집계 후 캐시 저장
 
     features: (N, 19) - 센서 평균값
     labels: (N,) - AVG_REMOVAL_RATE
     index: MultiIndex (WAFER_ID, STAGE)
     """
+    if CACHED_FEATURES.exists():
+        return _load_cached()
+    return _build_and_cache()
+
+
+def _load_cached() -> tuple[pd.DataFrame, pd.Series]:
+    df = pd.read_csv(CACHED_FEATURES, index_col=["WAFER_ID", "STAGE"])
+    labels = df["AVG_REMOVAL_RATE"]
+    features = df.drop(columns=["AVG_REMOVAL_RATE"])
+    return features, labels
+
+
+def _build_and_cache() -> tuple[pd.DataFrame, pd.Series]:
+    """raw trajectory에서 wafer-stage 단위로 평균 집계, 결과를 캐시 CSV로 저장"""
     if not TRAIN_TRAJ_DIR.exists() or not TRAIN_LABEL.exists():
         raise FileNotFoundError(
-            f"PHM 2016 CMP 데이터가 없음, {RAW_DIR}에 데이터셋을 두세요 "
-            "(data/phm2016/README.md 참고)"
+            f"PHM 2016 CMP 데이터가 없음, {RAW_DIR}에 데이터셋을 두거나 "
+            f"{CACHED_FEATURES} 캐시 파일이 필요합니다 (data/phm2016/README.md 참고)"
         )
 
-    # trajectory 파일 전체 로드 후 (WAFER_ID, STAGE)별 평균
     frames = []
     for path in sorted(TRAIN_TRAJ_DIR.glob("CMP-training-*.csv")):
         df = pd.read_csv(path, usecols=["WAFER_ID", "STAGE"] + SENSOR_COLS)
@@ -69,6 +84,13 @@ def load_phm_cmp() -> tuple[pd.DataFrame, pd.Series]:
     labels_df = pd.read_csv(TRAIN_LABEL)
     labels_df = labels_df.set_index(["WAFER_ID", "STAGE"])["AVG_REMOVAL_RATE"]
 
-    # feature와 label 인덱스 정합
     common = features.index.intersection(labels_df.index)
-    return features.loc[common], labels_df.loc[common]
+    features = features.loc[common]
+    labels = labels_df.loc[common]
+
+    # 캐시 저장 (배포 시 raw 없이도 동작하도록)
+    combined = features.copy()
+    combined["AVG_REMOVAL_RATE"] = labels
+    combined.to_csv(CACHED_FEATURES)
+
+    return features, labels

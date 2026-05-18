@@ -10,5 +10,7 @@ venv/
 CLAUDE.md
 .claude/
 .mcp.json
-data/secom/raw/*.data
+# SECOM raw는 commit (5MB, 배포 시 필요)
+# data/secom/raw/*.data
 data/phm2016/raw/
+agents/rag/knowledge/INC-AUTO-*.md
