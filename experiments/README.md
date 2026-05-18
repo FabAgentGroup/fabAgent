@@ -13,6 +13,7 @@
 | RAG-eval | RAGAS (hybrid vs hybrid_rerank) | 2 backend RAGAS 비교 | (D6에 통합) | [rag_eval/results.md](rag_eval/results.md) |
 | **D6** | RAG paradigm 5단계 ablation | No RAG / Naive / FAISS / Hybrid / +Rerank | **Hybrid** | [rag_paradigm/results.md](rag_paradigm/results.md) |
 | **D7** | Workflow vs Agentic | 단일 LLM 호출 vs tool-using 루프 | **Agentic** | [agentic_vs_workflow/results.md](agentic_vs_workflow/results.md) |
+| **D8** | CRAG ON vs OFF | self-correction (grader + refinement) | CRAG **활성 유지** (관측 가치) | [crag_eval/results.md](crag_eval/results.md) |
 
 ## 핵심 결정 요약
 
@@ -101,6 +102,31 @@
 
 **시행착오**: "4-Tier가 LLM 호출하니까 multi-agent다"라고 주장했다가, Anthropic의 [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) 정의로 자기 검증하니 **workflow였음** (각 Tier가 사전 RAG 1회 + LLM 1회). Tool-using 패턴으로 전환 후 인용 깊이는 +25% 정도지만, 도구 호출 로그가 reasoning trace이자 audit trail이 되는 게 결정적.
 
+### D8. CRAG (Self-correction) → **활성 유지** (관측 가치)
+
+| 지표 | CRAG OFF | CRAG ON | 변화 |
+|---|---|---|---|
+| Faithfulness | 0.641 | 0.639 | -0.1%p (동급) |
+| Answer Relevancy | 0.283 | 0.250 | -3.3%p (소폭 하락) |
+| LLM 호출 / 알람 | 3.0 | 3.7 | x1.22 |
+| 비용 / 1000알람 | $9.40 | $12.29 | x1.31 |
+| Latency (Tier 2) | 61s | 69s | x1.13 |
+| Refinement 발동률 | - | **20%** | (5번 중 1번) |
+| 평균 relevance_score | - | **0.61** | (CRAG ON에서 0~1로 가시화) |
+
+![CRAG 자가 정정 활동](crag_eval/charts/crag_activity.png)
+![CRAG 효과 - 답변 품질](crag_eval/charts/quality.png)
+
+**채택 근거 (솔직한 trade-off)**:
+
+1. **품질 변화 사실상 없음** - faithfulness -0.1%p, relevancy -3.3%p. 본 코퍼스(~10문서)에선 hybrid가 이미 잘 작동
+2. **자가 정정 메커니즘 자체는 작동 확인** - smoke test: gibberish 쿼리(`알수없음 xyzzy foobar`)에 avg score 0.0 부여 후 LLM이 `CMP 공정 실패 모드 분석...`으로 재작성, avg 0.0 → 0.68 회복
+3. **인용 신뢰도 가시화 가치** - 답변마다 0~1 relevance_score 노출 → 운영자가 "이 권고가 얼마나 강한 근거에 기반하는가" 즉시 판단
+4. **비용 +31% 절대값 무시 가능** - 1000 알람당 +$2.90
+5. **agentic loop와의 부분 중복** - agent가 이미 부족한 결과를 보고 다른 query로 재호출하는 self-correction 일부 수행
+
+**시행착오**: Anthropic·LangChain이 CRAG를 production 패턴으로 자주 언급. 단순 구현(grader + refiner) + smoke test에서 인상적 작동 확인. 그러나 정량 비교에서 **품질 변화 미미** - D6 Rerank와 같은 패턴. 작은 도메인 코퍼스에선 정교한 self-correction이 ROI 낮음. 정량 평가 없이는 "CRAG 도입했음" 마케팅으로 끝났을 것. 결정: **활성 유지하되 코퍼스 확장 시 재평가** (인용 신뢰도 노출이라는 부수 가치는 유지).
+
 ## 실행 방법
 
 ```bash
@@ -123,6 +149,9 @@
 
 # Workflow vs Agentic (D7)
 .venv/bin/python -m experiments.agentic_vs_workflow.benchmark
+
+# CRAG ON vs OFF (D8)
+.venv/bin/python -m experiments.crag_eval.benchmark
 ```
 
 각 실험은 `results.md`와 `charts/*.png`를 생성합니다.
