@@ -36,9 +36,34 @@ BODY_BUILDERS = {
 }
 
 
+LOADING_HTML = """
+<div class="fab-loading">
+  <div class="fab-loading-spinner"></div>
+  <h3 class="fab-loading-title">4-Tier 멀티 에이전트 분석 진행 중</h3>
+  <div class="fab-loading-subtitle">알람을 분석하기 위해 4단계 에이전트가 순차 실행됩니다</div>
+  <div class="fab-loading-pipeline">
+    <span class="step t1">Tier 1 이상 탐지</span>
+    <span class="arrow">→</span>
+    <span class="step t2">Tier 2 원인 분석</span>
+    <span class="arrow">→</span>
+    <span class="step t3">Tier 3 영향 평가</span>
+    <span class="arrow">→</span>
+    <span class="step t4">Tier 4 대응 권고</span>
+  </div>
+  <div class="fab-loading-hint">첫 호출은 LLM 3회 직렬로 약 60초 소요됩니다 · 이후 동일 알람은 캐시로 즉시 응답</div>
+</div>
+"""
+
+
 def render_tier_cascade():
     ss = st.session_state
-    data = get_tier_data(ss.selected_alarm_id)
+    # 첫 호출 시 LLM 3회 직렬로 약 60초, 사용자 안내를 위해 로딩 카드 먼저 렌더
+    loading_slot = st.empty()
+    loading_slot.html(LOADING_HTML)
+    try:
+        data = get_tier_data(ss.selected_alarm_id)
+    finally:
+        loading_slot.empty()
 
     if data is None:
         st.markdown(

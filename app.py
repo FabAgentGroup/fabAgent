@@ -13,7 +13,7 @@ from components.tiers import render_tier_cascade
 from data.demo import DEFAULT_ALARMS
 
 st.set_page_config(
-    page_title="FabAgent — 운영자 대시보드",
+    page_title="FabAgent - 운영자 대시보드",
     page_icon="🟦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -86,7 +86,7 @@ def render_main():
         st.markdown(
             f"""
             <h1 class="fab-main-title">
-              {title_text} — <span style="font-family:var(--mono); font-weight:700;">{lot_id}</span>
+              {title_text} - <span style="font-family:var(--mono); font-weight:700;">{lot_id}</span>
             </h1>
             <div class="fab-main-sub">
               <span>4-Tier 분석 워크플로우</span>

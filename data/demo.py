@@ -88,8 +88,8 @@ TIER_DATA: dict[str, TierData] = {
         "tier4": {
             "immediate": [
                 {"text": "렌즈 PM 긴급 투입", "meta": "예상 2시간"},
-                {"text": "후공정 진입 보류 — 영향 lot 3건 (75장)", "meta": "Etch hold"},
-                {"text": "양산 일정 재조정 — 영향 범위 격리", "meta": "PPC 협조"},
+                {"text": "후공정 진입 보류 - 영향 lot 3건 (75장)", "meta": "Etch hold"},
+                {"text": "양산 일정 재조정 - 영향 범위 격리", "meta": "PPC 협조"},
             ],
             "longterm": [
                 {"text": "PM 주기 단축 권고: 30일 → 21일", "meta": None},

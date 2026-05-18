@@ -141,7 +141,7 @@ def tier_4_body_html(data: Tier4) -> str:
     imm_items = "".join(item(i, a) for i, a in enumerate(data["immediate"]))
     lng_items = "".join(item(i, a) for i, a in enumerate(data["longterm"]))
     refs_html = "".join(
-        f'<li><code>{r["id"]}</code> — {r["desc"]}</li>' for r in data["refs"]
+        f'<li><code>{r["id"]}</code> - {r["desc"]}</li>' for r in data["refs"]
     )
 
     return f"""

@@ -507,6 +507,71 @@ a.alarm-card-link:hover .alarm-card {
   width: 12px; height: 1px; background: var(--border);
 }
 
+/* ============== Loading state (cold start) ============== */
+
+.fab-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 40px 20px;
+  text-align: center;
+  animation: card-fade-in 0.3s ease;
+}
+.fab-loading-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid var(--bg-subtle);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 22px;
+}
+.fab-loading-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+.fab-loading-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 26px;
+}
+.fab-loading-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+}
+.fab-loading-pipeline .step {
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+}
+.fab-loading-pipeline .step.t1 { color: var(--t1-text); background: var(--t1-bg); }
+.fab-loading-pipeline .step.t2 { color: var(--t2-text); background: var(--t2-bg); }
+.fab-loading-pipeline .step.t3 { color: var(--t3-text); background: var(--t3-bg); }
+.fab-loading-pipeline .step.t4 { color: var(--t4-text); background: var(--t4-bg); }
+.fab-loading-pipeline .arrow {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.fab-loading-hint {
+  margin-top: 22px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 /* ============== Empty state ============== */
 
 .fab-empty {

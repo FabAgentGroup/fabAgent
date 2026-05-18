@@ -1,4 +1,4 @@
-# SOP-CMP-SLURRY-001 — CMP 슬러리 관리 표준 절차
+# SOP-CMP-SLURRY-001 - CMP 슬러리 관리 표준 절차
 
 ## 목적
 
