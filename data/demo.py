@@ -27,11 +27,12 @@ DEFAULT_ALARMS = [
     },
     {
         "id": "A3",
-        "status": "done",
+        "status": "warn",
         "title": "CMP Step 이상",
         "lot_id": "L20240510-N-08",
-        "feature": None,
-        "time": "2시간 전",
+        "feature": "재료 제거율(MRR)",
+        "feature_arrow": "↑",
+        "time": "1시간 전",
     },
 ]
 

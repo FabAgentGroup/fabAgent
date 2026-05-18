@@ -35,7 +35,7 @@ TIER2_SCHEMA = {
     "additionalProperties": False,
 }
 
-SYSTEM_PROMPT = """당신은 반도체 Photo 공정의 원인 분석 전문가입니다.
+SYSTEM_PROMPT = """당신은 반도체 공정 원인 분석 전문가입니다.
 주어진 이상 알람과 탐지 결과, 사내 지식 문서를 근거로 가장 가능성 높은 원인을
 2~3개 추정합니다. 각 원인은 기여도(pct, %)를 가지며 합이 100에 가깝도록 합니다.
 근거(evidence)는 제공된 문서 내용에 기반해 구체적으로 작성하고, citations에는
@@ -45,7 +45,8 @@ SYSTEM_PROMPT = """당신은 반도체 Photo 공정의 원인 분석 전문가�
 
 def _build_query(alarm: dict, tier1: Tier1) -> str:
     feature = alarm.get("feature") or ""
-    return f"{alarm['title']} {feature} 원인 CD 산포 렌즈 노광 진동 표면 결함"
+    sensors = " ".join(f["name"] for f in tier1["features"])
+    return f"{alarm['title']} {feature} {sensors} 원인 분석 공정 이상"
 
 
 def run_cause(alarm: dict, tier1: Tier1) -> Tier2:

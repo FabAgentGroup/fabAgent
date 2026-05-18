@@ -11,6 +11,14 @@ WIP_BY_ALARM: dict[str, list[ImpactLot]] = {
         {"label": "가공 중", "lots": 3, "wafers": 75},
         {"label": "대기 중", "lots": 5, "wafers": 125},
     ],
+    "A2": [
+        {"label": "가공 중", "lots": 2, "wafers": 50},
+        {"label": "대기 중", "lots": 4, "wafers": 100},
+    ],
+    "A3": [
+        {"label": "가공 중", "lots": 4, "wafers": 100},
+        {"label": "대기 중", "lots": 6, "wafers": 150},
+    ],
 }
 
 
