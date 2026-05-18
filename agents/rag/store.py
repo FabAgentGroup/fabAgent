@@ -54,7 +54,10 @@ def search(query: str, top_k: int = 3) -> list[str]:
     - hybrid: BM25 + FAISS + Reciprocal Rank Fusion (production 표준)
     - hybrid_rerank: hybrid 결과를 cross-encoder로 재정렬 (최고 정확도)
     """
-    backend = os.getenv("RAG_BACKEND", "hybrid_rerank").lower()
+    # 기본값: hybrid (BM25+FAISS+RRF)
+    # 근거: experiments/rag_paradigm 실측에서 본 코퍼스 규모(~10문서)에 가장 적합
+    # 코퍼스 100+ 확장 시 hybrid_rerank 재평가 권장
+    backend = os.getenv("RAG_BACKEND", "hybrid").lower()
     if backend == "faiss":
         from agents.rag.faiss_store import faiss_search
 
