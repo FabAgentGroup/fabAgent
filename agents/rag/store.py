@@ -46,9 +46,27 @@ def keyword_search(query: str, top_k: int = 3) -> list[str]:
 
 
 def search(query: str, top_k: int = 3) -> list[str]:
-    """기본 검색 진입점, 환경변수 RAG_BACKEND로 백엔드 전환"""
-    if os.getenv("RAG_BACKEND", "keyword").lower() == "faiss":
+    """기본 검색 진입점, 환경변수 RAG_BACKEND로 백엔드 전환
+
+    backend 옵션:
+    - keyword (기본): 단순 키워드 매칭
+    - faiss: sentence-transformer + FAISS dense vector
+    - hybrid: BM25 + FAISS + Reciprocal Rank Fusion (production 표준)
+    - hybrid_rerank: hybrid 결과를 cross-encoder로 재정렬 (최고 정확도)
+    """
+    backend = os.getenv("RAG_BACKEND", "hybrid_rerank").lower()
+    if backend == "faiss":
         from agents.rag.faiss_store import faiss_search
 
         return faiss_search(query, top_k)
+    if backend == "hybrid":
+        from agents.rag.hybrid_store import hybrid_search
+
+        return hybrid_search(query, top_k)
+    if backend == "hybrid_rerank":
+        from agents.rag.hybrid_store import hybrid_search
+        from agents.rag.rerank import rerank
+
+        candidates = hybrid_search(query, top_k=10)
+        return rerank(query, candidates, top_k)
     return keyword_search(query, top_k)
