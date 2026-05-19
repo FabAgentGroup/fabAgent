@@ -143,6 +143,18 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 
 ![CRAG 효과 - 답변 품질](experiments/crag_eval/charts/quality.png)
 
+### D10 핵심 그래프 (확장 코퍼스에서 reranker 효과 반전 검증)
+
+![Reranker 비교 (34 docs)](experiments/reranker_compare/charts/reranker_comparison.png)
+
+### D11 핵심 그래프 (Conductor vs Autonomous)
+
+![호출 횟수 비교](experiments/conductor_vs_autonomous/charts/calls_comparison.png)
+
+![Latency 비교](experiments/conductor_vs_autonomous/charts/latency_comparison.png)
+
+![비용 비교](experiments/conductor_vs_autonomous/charts/cost_comparison.png)
+
 ## 시행착오 (Journey)
 
 이 시스템이 처음부터 이 모양이었던 건 아닙니다. 실제로 다음 다섯 번의 큰 방향 전환을 거쳤습니다.
@@ -215,6 +227,24 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 - **해석**: 한국어 reranker가 영어보단 도메인 적합성 약간 우위지만, **본 코퍼스 규모(~10문서)에선 hybrid top-3이 이미 충분히 정밀해 어떤 reranker도 의미 있는 이득 없음**
 - **결론(잠정)**: D6 가설 부분적 재확인 - 코퍼스 규모가 진짜 원인이라는 더 큰 가설을 제시
 
+### 8. Supervisor agent - LLM-driven 동적 workflow routing
+
+- **시작**: 기존 conditional edge는 threshold 기반(`score < 0.3` → skip, `max pct < 40` → retry). "진짜 agent라면 LLM이 맥락을 보고 결정해야 한다"
+- **구현**: `agents/supervisor.py` - Tier 2 결과를 받아 3가지 action 결정
+  - `proceed_full` (표준): Tier 3 → Tier 4
+  - `fast_track` (단일 원인 우세): Tier 3 LLM skip, deterministic 경량 처리로 비용 절감
+  - `escalate` (고위험): 정상 진행 + human review 플래그 (Tier 4 immediate 첫 항목에 🚨 prepend)
+- **모델**: gpt-4o-mini (의사결정 소작업, 비용 절감)
+- **LangGraph 시각화**: 3개 분기 노드 (detect, cause, supervisor) - 정적 + LLM-driven 라우팅의 조합
+- **smoke test**: A1 (medium severity, 3 causes) → proceed_full, A2/A3 (high severity) → proceed_full. 현 데이터에선 모두 표준 경로 선택 (안전한 기본)
+
+### 9. LangSmith observability 통합
+
+- **목적**: production-grade 트레이스 대시보드. 알람별 LLM 호출 트리, tool 호출 시퀀스, latency·token 분석
+- **구현**: `wrap_openai`로 모든 chat.completions.create 자동 트레이스, `@traceable` 데코레이터로 4-Tier agent + Supervisor + tool dispatcher를 nested run으로 시각화
+- **토글**: 환경변수 `LANGSMITH_TRACING=true/false`로 on/off, 비활성 시 no-op (성능·기능 영향 없음)
+- **포트폴리오 가치**: 인터뷰에서 "각 LLM 호출·tool 호출·token·latency 다 보입니다" 한 줄로 production-grade 인상
+
 ### 10. 코퍼스 12 → 34 확장 + D10으로 가설 검증
 
 - **시작**: D9까지 누적된 가설 "코퍼스 규모가 reranker 효용의 선결조건". 이를 정량 검증하려면 코퍼스 확장 필수
@@ -245,24 +275,6 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
   - 인용 깊이: 6.0 → 6.0 (**동등**, 품질 손실 없음)
 - **핵심 narrative**: D7(workflow → agentic으로 자율성 확보) → D11(agentic → conductor로 효율 회복). 두 단계 모두 정량 데이터 기반 의사결정. **autonomous의 자율성 vs conductor의 효율성을 trade-off로 명시 채택**
 - **재귀 위험 원천 차단**: 기존 `MAX_TOOL_ITERATIONS=4` 캡에 의존하던 무한루프 방지가 plan 고정 실행으로 본질적으로 해결
-
-### 8. Supervisor agent - LLM-driven 동적 workflow routing
-
-- **시작**: 기존 conditional edge는 threshold 기반(`score < 0.3` → skip, `max pct < 40` → retry). "진짜 agent라면 LLM이 맥락을 보고 결정해야 한다"
-- **구현**: `agents/supervisor.py` - Tier 2 결과를 받아 3가지 action 결정
-  - `proceed_full` (표준): Tier 3 → Tier 4
-  - `fast_track` (단일 원인 우세): Tier 3 LLM skip, deterministic 경량 처리로 비용 절감
-  - `escalate` (고위험): 정상 진행 + human review 플래그 (Tier 4 immediate 첫 항목에 🚨 prepend)
-- **모델**: gpt-4o-mini (의사결정 소작업, 비용 절감)
-- **LangGraph 시각화**: 3개 분기 노드 (detect, cause, supervisor) - 정적 + LLM-driven 라우팅의 조합
-- **smoke test**: A1 (medium severity, 3 causes) → proceed_full, A2/A3 (high severity) → proceed_full. 현 데이터에선 모두 표준 경로 선택 (안전한 기본)
-
-### 9. LangSmith observability 통합
-
-- **목적**: production-grade 트레이스 대시보드. 알람별 LLM 호출 트리, tool 호출 시퀀스, latency·token 분석
-- **구현**: `wrap_openai`로 모든 chat.completions.create 자동 트레이스, `@traceable` 데코레이터로 4-Tier agent + Supervisor + tool dispatcher를 nested run으로 시각화
-- **토글**: 환경변수 `LANGSMITH_TRACING=true/false`로 on/off, 비활성 시 no-op (성능·기능 영향 없음)
-- **포트폴리오 가치**: 인터뷰에서 "각 LLM 호출·tool 호출·token·latency 다 보입니다" 한 줄로 production-grade 인상
 
 ## 실행
 
