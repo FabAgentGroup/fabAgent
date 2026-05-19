@@ -16,6 +16,7 @@
 | **D8** | CRAG ON vs OFF | self-correction (grader + refinement) | CRAG **활성 유지** (관측 가치) | [crag_eval/results.md](crag_eval/results.md) |
 | **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) | vs BAAI(영어) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | [reranker_compare/results.md](reranker_compare/results.md) |
 | **D10** | D9 후속: 코퍼스 12→34 확장 후 reranker 재평가 | hybrid / BAAI / ko-reranker (34 docs) | **가설 검증 - 효과 완전 반전** | [reranker_compare/results.md](reranker_compare/results.md) |
+| **D11** | Conductor (Plan-and-Execute) vs Autonomous | 4 LLM call vs 10 LLM call | **Conductor 채택** (속도·비용 우위, 품질 동등) | [conductor_vs_autonomous/results.md](conductor_vs_autonomous/results.md) |
 
 ## 핵심 결정 요약
 
@@ -169,6 +170,28 @@
 
 **핵심 메시지**: 정량 평가 없이는 잘못된 통념을 그대로 끌고 갈 뻔했고, 정량 평가 덕분에 진짜 원인을 분리하고 검증할 수 있었다. 채택: 코퍼스 30+ 환경에서는 `RAG_BACKEND=hybrid_rerank` 권장, 데모용 코퍼스는 hybrid 유지.
 
+### D11. Conductor (Plan-and-Execute) vs Autonomous → **Conductor 채택**
+
+| 지표 | Autonomous | Conductor | 변화 |
+|---|---|---|---|
+| LLM 호출 / 알람 | 10.0 | **4.0** | **-60%** |
+| Tool 호출 / 알람 | 13.7 | 16.0 | +17% |
+| 유니크 인용 / 알람 | 6.0 | **6.0** | **동등** |
+| 입력 토큰 | 25,849 | 8,042 | **-69%** |
+| 출력 토큰 | 13,385 | 5,895 | **-56%** |
+| **Latency / 알람** | **131초** | **60초** | **-54%** |
+| 비용 / 1000알람 | $33.23 | $13.80 | **-58%** |
+
+![호출 비교](conductor_vs_autonomous/charts/calls_comparison.png)
+![Latency 비교](conductor_vs_autonomous/charts/latency_comparison.png)
+
+**의의 (D7 → D11 narrative)**:
+
+- **D7**: "workflow → agentic"으로 reasoning trace·자율성 확보 (각 Tier가 tool 자율 호출)
+- **D11**: "agentic → conductor"로 통신 효율 회복 (Central Planner가 plan 1회 산출 + Tier executor가 plan대로 실행 + LLM 1회 synthesis)
+- 두 패턴 모두 정량 비교 후 채택. autonomous는 환경변수 `AGENT_MODE=autonomous`로 보존 (복잡한 알람·예상치 못한 컨텍스트 적응 필요 시)
+- **재귀·무한루프 위험 원천 차단**: autonomous의 `MAX_TOOL_ITERATIONS=4` 캡 의존이 plan 고정 실행으로 본질적 해결
+
 ## 실행 방법
 
 ```bash
@@ -195,8 +218,11 @@
 # CRAG ON vs OFF (D8)
 .venv/bin/python -m experiments.crag_eval.benchmark
 
-# 한국어 reranker (Dongjin-kr/ko-reranker) 평가 (D9)
+# 한국어 reranker (Dongjin-kr/ko-reranker) 평가 (D9·D10)
 .venv/bin/python -m experiments.reranker_compare.benchmark
+
+# Conductor vs Autonomous (D11)
+.venv/bin/python -m experiments.conductor_vs_autonomous.benchmark
 ```
 
 각 실험은 `results.md`와 `charts/*.png`를 생성합니다.

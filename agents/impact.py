@@ -1,7 +1,8 @@
-"""Tier 3 공정 간 영향 평가 에이전트 (tool-using agent)
+"""Tier 3 공정 간 영향 평가 에이전트
 
-LLM이 도구를 자율 호출해 WIP·downstream·yield 기준선·PM 이력을 모은 뒤
-yield_loss와 영향 받는 후공정 목록을 산출합니다.
+두 모드 지원:
+1. Autonomous (plan=None): LLM이 tool을 자율 호출하는 agent loop
+2. Conductor (plan 제공): Planner가 지정한 tool 호출 + 단일 LLM synthesis
 
 가용 도구: query_wip_status, get_downstream_steps, get_yield_baseline, get_pm_history
 """
@@ -87,8 +88,104 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2) -> str:
 WIP·downstream·yield·PM 컨텍스트는 도구를 호출해 자율적으로 수집하세요."""
 
 
+CONDUCTOR_SYSTEM_PROMPT = """당신은 반도체 공정 영향 평가 전문가입니다.
+Central Planner가 이미 필요한 정보(WIP·downstream·yield·PM)를 모두 수집해 [수집된 컨텍스트]에 정리해 두었습니다.
+당신은 추가 도구 호출 없이 그 컨텍스트만 사용해 산출하세요.
+
+[최종 산출물]
+- yield_loss: 본 이상으로 인한 예상 수율 손실(%p, 소수 한 자리)
+- downstream_dependencies: 영향 받는 후공정 (current 제외) - stage / delta / tag / kind"""
+
+
+def _execute_tier3_plan(plan_tier3: dict, trace_calls: list) -> str:
+    """Planner가 지정한 tool들을 직접 호출하고 컨텍스트로 변환"""
+    blocks = []
+    if plan_tier3.get("alarm_id"):
+        r = dispatch_tool("query_wip_status", {"alarm_id": plan_tier3["alarm_id"]})
+        trace_calls.append({"name": "query_wip_status", "args": {"alarm_id": plan_tier3["alarm_id"]}})
+        blocks.append(f"[query_wip_status: {plan_tier3['alarm_id']!r}]\n{r}")
+    for stage in plan_tier3.get("downstream_stages", []):
+        r = dispatch_tool("get_downstream_steps", {"current_stage": stage})
+        trace_calls.append({"name": "get_downstream_steps", "args": {"current_stage": stage}})
+        blocks.append(f"[get_downstream_steps: {stage!r}]\n{r}")
+    for proc in plan_tier3.get("yield_processes", []):
+        r = dispatch_tool("get_yield_baseline", {"process": proc})
+        trace_calls.append({"name": "get_yield_baseline", "args": {"process": proc}})
+        blocks.append(f"[get_yield_baseline: {proc!r}]\n{r}")
+    for eq_id in plan_tier3.get("equipment_ids", []):
+        r = dispatch_tool("get_pm_history", {"equipment_id": eq_id})
+        trace_calls.append({"name": "get_pm_history", "args": {"equipment_id": eq_id}})
+        blocks.append(f"[get_pm_history: {eq_id!r}]\n{r}")
+    return "\n\n".join(blocks) if blocks else "(planner가 정보 수집 지시 없음)"
+
+
+def _run_impact_conductor(
+    alarm: dict, tier1: Tier1, tier2: Tier2, plan: dict, trace: dict | None
+) -> Tier3:
+    tool_log: list[dict] = []
+    knowledge = _execute_tier3_plan(plan.get("tier3", {}), tool_log)
+
+    cause_lines = "\n".join(
+        f"- {c['name']} ({c['pct']}%): {c['evidence'][:120]}" for c in tier2["causes"]
+    )
+    current_stage = _stage_from_alarm(alarm)
+    user_prompt = f"""## 이상 알람
+- 공정: {alarm['title']} (current_stage: {current_stage})
+
+## Tier 1: 이상 점수 {tier1['score']}
+
+## Tier 2 원인 분석
+{cause_lines}
+
+## 수집된 컨텍스트 (Planner 지정)
+{knowledge}
+
+위 컨텍스트만 사용해 yield_loss와 downstream_dependencies를 산출하세요."""
+
+    resp = client().chat.completions.create(
+        model=SUBAGENT_MODEL,
+        messages=[
+            {"role": "system", "content": CONDUCTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "tier3_part", "schema": LLM_PART_SCHEMA, "strict": True},
+        },
+    )
+    llm_out = json.loads(resp.choices[0].message.content)
+
+    current_dep = {
+        "stage": current_stage,
+        "delta": f"+{tier1['score']}",
+        "tag": "현재",
+        "kind": "current",
+    }
+    if trace is not None:
+        trace["tool_calls"] = tool_log
+        trace["iterations"] = 0
+        trace["llm_calls"] = 1
+        trace["mode"] = "conductor"
+
+    return {
+        "yield_loss": round(float(llm_out["yield_loss"]), 1),
+        "dependencies": [current_dep] + llm_out["downstream_dependencies"],
+        "impact_lots": get_affected_wip(alarm["id"]),
+    }
+
+
 @traceable(name="Tier3_Impact_Agent", run_type="chain")
-def run_impact(alarm: dict, tier1: Tier1, tier2: Tier2, trace: dict | None = None) -> Tier3:
+def run_impact(
+    alarm: dict,
+    tier1: Tier1,
+    tier2: Tier2,
+    trace: dict | None = None,
+    plan: dict | None = None,
+) -> Tier3:
+    """Tier 3 영향 평가. plan 제공 시 conductor 모드(LLM 1회), 아니면 autonomous loop."""
+    if plan is not None:
+        return _run_impact_conductor(alarm, tier1, tier2, plan, trace)
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _initial_user_prompt(alarm, tier1, tier2)},
@@ -141,6 +238,7 @@ def run_impact(alarm: dict, tier1: Tier1, tier2: Tier2, trace: dict | None = Non
         trace["tool_calls"] = tool_call_log
         trace["iterations"] = iterations
         trace["llm_calls"] = iterations + 1
+        trace["mode"] = "autonomous"
 
     return {
         "yield_loss": round(float(llm_out["yield_loss"]), 1),
