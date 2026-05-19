@@ -38,7 +38,14 @@ from ragas.metrics import (
     ResponseRelevancy,
 )
 
-from agents.cause import SYSTEM_PROMPT, TIER2_SCHEMA, _build_query
+from agents.cause import SYSTEM_PROMPT, TIER2_SCHEMA
+
+
+def _build_query(alarm: dict, tier1) -> str:
+    """원 cause.py에 있던 query builder (agentic 전환으로 제거됨, 본 실험용으로 인라인 보존)"""
+    feature = alarm.get("feature") or ""
+    sensors = " ".join(f["name"] for f in tier1["features"])
+    return f"{alarm['title']} {feature} {sensors} 원인 분석 공정 이상"
 from agents.detection import run_detection
 from agents.llm import SUBAGENT_MODEL, client
 from agents.rag.store import load_document, search
