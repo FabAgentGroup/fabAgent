@@ -110,3 +110,13 @@ production RAG 표준 패턴이기도 합니다 (Microsoft Azure AI Search, Llam
 - 어떤 RAG든 No RAG보다 압도적으로 낫다 → RAG는 production 필수
 - 코퍼스 규모와 도메인 언어에 맞춰 paradigm을 선택해야 한다 (블라인드 적용은 역효과)
 - 정량 평가(RAGAS)가 없으면 'rerank가 무조건 좋다'는 오해를 그대로 끌고 갔을 것
+
+## 후속 - 확장 코퍼스(34 docs) 재실행 시도와 한계
+
+코퍼스를 12 → 34개로 확장한 후 본 D6 벤치마크 재실행을 시도하였으나, **RAGAS 평가의 인프라 한계**로 신뢰할 결과를 얻지 못했습니다.
+
+- 증상: gpt-4o-mini 기반 평가가 큰 context(34 docs × 일부 평균 600자 snippet)에서 60~120초 timeout 빈발
+- 결과: 45개 평가 작업 중 다수가 TimeoutError → faithfulness/context_precision이 N/A 처리
+- 시사: production RAG 평가 인프라는 평가 LLM의 context window·timeout·동시 호출 한도를 함께 설계해야 함
+
+대신 **확장 코퍼스에서의 reranker 효과 검증은 [D10](../reranker_compare/results.md)** 에서 CRAG grader 기반 경량 평가로 성공했습니다. D10 결과가 본 D6의 "코퍼스 확장 시 rerank 재평가 권장"이라는 결론을 정량으로 입증합니다.
