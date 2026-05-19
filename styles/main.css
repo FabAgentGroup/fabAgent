@@ -1204,9 +1204,9 @@ a.alarm-card-link:hover .alarm-card {
 
 .action-item {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 280px);
   gap: 12px;
-  align-items: center;
+  align-items: start;
   padding: 12px 16px;
   font-size: 13px;
 }
@@ -1230,7 +1230,7 @@ a.alarm-card-link:hover .alarm-card {
   color: var(--crit-text);
 }
 
-.action-text { line-height: 1.5; }
+.action-text { line-height: 1.5; min-width: 0; word-break: break-word; }
 .action-meta {
   font-size: 10px;
   font-weight: 600;
@@ -1238,7 +1238,10 @@ a.alarm-card-link:hover .alarm-card {
   padding: 3px 8px;
   border-radius: 4px;
   background: var(--bg-subtle);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+  min-width: 0;
 }
 
 .refs {
