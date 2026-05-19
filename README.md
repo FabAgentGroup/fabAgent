@@ -23,8 +23,9 @@ auditable한 reasoning trace를 제공합니다.
 ## 핵심 특징
 
 - **4-Tier multi-agent system** - 탐지(ML) · 원인(agentic RAG) · 영향(tool-using) · 대응(tool-using)
-- **Tool-using agent** - 7개 도메인 도구를 LLM이 자율 선택·반복 호출 (OpenAI function calling)
-- **Supervisor agent** - LLM이 Tier 2 결과를 보고 후속 workflow path(proceed_full / fast_track / escalate) 동적 결정
+- **Plan-and-Execute 패턴** (기본) - Central Planner Agent가 전체 워크플로우 plan을 1회 산출, Tier executor가 plan대로 실행 → 통신 오버헤드 최소화 (LLM 호출 -60%, latency -54%)
+- **Tool-using agent** (옵션) - 7개 도메인 도구를 LLM이 자율 선택·반복 호출 (`AGENT_MODE=autonomous`)
+- **Supervisor agent** (autonomous 모드) - LLM이 Tier 2 결과를 보고 후속 workflow path(proceed_full / fast_track / escalate) 동적 결정
 - **조건부 라우팅** - LangGraph에서 severity gate + cause confidence retry + supervisor 분기 (3단계)
 - **CRAG self-correction** - retrieval grader가 검색 품질 평가, 임계치 미달 시 쿼리 자동 재작성
 - **LangSmith observability** - 모든 LLM·tool·agent 호출 자동 트레이스 (production-grade)
@@ -122,6 +123,7 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 | **D8** | CRAG (Self-correction) ON vs OFF | CRAG **활성 유지** (관측 가치) | 품질 변화 -0.1%p (동급), refinement 발동률 20%, relevance_score 노출, 비용 +31% |
 | **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) vs 영어(BAAI) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | hybrid 0.734 / BAAI 0.714 / ko 0.703 |
 | **D10** | **D9 후속**: 코퍼스 12→34 확장 후 reranker 재평가 | **가설 검증 - 효과 완전 반전** | hybrid **0.592** / BAAI **0.709 (+0.117)** / ko **0.675 (+0.083)** |
+| **D11** | Conductor (Plan-and-Execute) vs Autonomous (tool-using loop) | **Conductor 채택** | LLM -60%, Latency **131→60초 (-54%)**, 비용 -58%, **인용 동등(6.0)** |
 
 ### D6 핵심 그래프
 
@@ -230,6 +232,20 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 - **결정**: 코퍼스 30+ 환경에서는 `RAG_BACKEND=hybrid_rerank` 권장. 데모용 12개에선 hybrid 유지
 - **시리즈 의의**: D6 → D9 → D10이 portfolio narrative로 완성. "통념 → 정량 반박 → 가설 → 정량 검증"의 사이클이 정량 평가의 가치 자체를 증명
 
+### 11. Conductor 패턴 (Plan-and-Execute) 도입 - "agentic → conductor" 전환
+
+- **상황**: 4-tier agentic 시스템(D7) 도입 후 알람당 약 3분(194초)·LLM 10~13회로 데모 UX 저하. 코퍼스 확장(D10)으로 컨텍스트 더 무거워짐
+- **진단**: Anthropic의 [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents)가 명시하듯 "autonomous" 패턴은 적응성이 강점이지만 통신 오버헤드(iteration 누적·재귀 호출 위험) 큼
+- **전환**: Plan-and-Execute 패턴 - Central Planner Agent가 알람+Tier 1을 보고 전체 워크플로우(Tier 2/3/4 각 tool 호출 plan)를 1회 산출, 각 Tier executor는 plan대로 tool 직접 실행 + LLM 1회 synthesis
+- **구현**: `agents/planner.py` 신규 + `cause/impact/response.py`에 conductor 경로 추가 (autonomous는 옵션 유지). 환경변수 `AGENT_MODE=conductor` (기본) / `autonomous`로 토글
+- **D11 정량 결과 (3 알람, CRAG OFF 동일 조건)**:
+  - LLM 호출: 10.0 → 4.0 (**-60%**, Planner 1 + Tier×3 synthesis)
+  - Latency: 131초 → **60초** (**-54%**)
+  - 비용: $33.23 → $13.80 / 1000알람 (**-58%**)
+  - 인용 깊이: 6.0 → 6.0 (**동등**, 품질 손실 없음)
+- **핵심 narrative**: D7(workflow → agentic으로 자율성 확보) → D11(agentic → conductor로 효율 회복). 두 단계 모두 정량 데이터 기반 의사결정. **autonomous의 자율성 vs conductor의 효율성을 trade-off로 명시 채택**
+- **재귀 위험 원천 차단**: 기존 `MAX_TOOL_ITERATIONS=4` 캡에 의존하던 무한루프 방지가 plan 고정 실행으로 본질적으로 해결
+
 ### 8. Supervisor agent - LLM-driven 동적 workflow routing
 
 - **시작**: 기존 conditional edge는 threshold 기반(`score < 0.3` → skip, `max pct < 40` → retry). "진짜 agent라면 LLM이 맥락을 보고 결정해야 한다"
@@ -268,6 +284,13 @@ RAG_BACKEND=hybrid streamlit run app.py        # 기본값 (실측 데이터 근
 RAG_BACKEND=hybrid_rerank streamlit run app.py # 옵션: 코퍼스 확장 시
 RAG_BACKEND=faiss streamlit run app.py         # 옵션: 의미 위주
 RAG_BACKEND=keyword streamlit run app.py       # 옵션: 의존성 최소
+```
+
+### Agent 모드 토글 (D11)
+
+```bash
+AGENT_MODE=conductor streamlit run app.py    # 기본 - Plan-and-Execute (빠르고 저렴, 통신 최소)
+AGENT_MODE=autonomous streamlit run app.py   # 옵션 - tool-using agent loop (적응성 우위)
 ```
 
 ### CRAG (Self-correction) 토글
@@ -314,10 +337,11 @@ fabagent/
 ├── agents/
 │   ├── orchestrator.py          # LangGraph StateGraph + 조건부 라우팅
 │   ├── detection.py             # Tier 1 IsolationForest (SECOM/PHM 디스패치)
-│   ├── cause.py                 # Tier 2 agentic RAG (tool-calling loop)
-│   ├── impact.py                # Tier 3 tool-using agent
-│   ├── response.py              # Tier 4 tool-using agent
-│   ├── supervisor.py            # LLM-driven dynamic workflow router (proceed_full/fast_track/escalate)
+│   ├── planner.py               # Central Planner Agent (Plan-and-Execute, conductor 모드)
+│   ├── cause.py                 # Tier 2 (conductor: plan 받음 / autonomous: tool loop)
+│   ├── impact.py                # Tier 3 (conductor / autonomous 양 모드)
+│   ├── response.py              # Tier 4 (conductor / autonomous 양 모드)
+│   ├── supervisor.py            # autonomous 모드 전용 LLM-driven router
 │   ├── llm.py                   # OpenAI 클라이언트 + LangSmith wrap_openai 통합
 │   ├── tools/                   # 7개 agent 도구
 │   │   ├── knowledge.py         #   search_knowledge (RAG 검색)
@@ -345,7 +369,8 @@ fabagent/
 │   ├── rag_paradigm/            # D6: 5단계 paradigm ablation
 │   ├── agentic_vs_workflow/     # D7: workflow vs agentic 비교
 │   ├── crag_eval/               # D8: CRAG self-correction 효과 평가
-│   └── reranker_compare/        # D9: 한국어 reranker(Dongjin-kr/ko-reranker) 평가
+│   ├── reranker_compare/        # D9·D10: 한국어 reranker + 확장 코퍼스 가설 검증
+│   └── conductor_vs_autonomous/ # D11: Conductor vs Autonomous (latency -54%, 인용 동등)
 ├── docs/orchestrator_graph.mmd  # LangGraph 자동 추출 mermaid
 ├── styles/main.css              # 디자인 시스템
 └── tests/
