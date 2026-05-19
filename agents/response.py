@@ -1,7 +1,8 @@
-"""Tier 4 대응 권고 에이전트 (tool-using agent)
+"""Tier 4 대응 권고 에이전트
 
-LLM이 도구를 자율 호출해 SOP·과거 incident·PM 윈도우를 모은 뒤
-즉시 조치(immediate)와 중장기 조치(longterm)를 산출합니다.
+두 모드 지원:
+1. Autonomous (plan=None): LLM이 tool을 자율 호출하는 agent loop
+2. Conductor (plan 제공): Planner가 지정한 tool 호출 + 단일 LLM synthesis
 
 가용 도구: search_knowledge, lookup_incident_history, get_pm_history, check_pm_schedule
 """
@@ -116,10 +117,111 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3) 
 필요한 SOP·과거 해결책·PM 윈도우는 도구를 호출해 자율적으로 수집하세요."""
 
 
+CONDUCTOR_SYSTEM_PROMPT = """당신은 반도체 공정 대응 권고 전문가입니다.
+Central Planner가 이미 필요한 정보(SOP·과거 해결책·PM 윈도우)를 모두 수집해 [수집된 컨텍스트]에 정리해 두었습니다.
+당신은 추가 도구 호출 없이 그 컨텍스트만 사용해 산출하세요.
+
+[최종 산출물]
+- immediate: 즉시 조치 2~3건 (수 시간 내 실행 가능, meta에 시간·hold 대상·부서 명시)
+- longterm: 중장기 조치 1~2건
+- ref_doc_ids: 권고 근거로 실제 사용한 문서 ID (search_knowledge가 반환한 doc_id만)"""
+
+
+def _execute_tier4_plan(plan_tier4: dict, trace_calls: list) -> tuple[str, list[str]]:
+    """Planner가 지정한 tool들을 직접 호출, 컨텍스트 + 검색 doc_id 리스트 반환"""
+    blocks = []
+    found_docs: list[str] = []
+    for query in plan_tier4.get("search_queries", []):
+        r = dispatch_tool("search_knowledge", {"query": query})
+        trace_calls.append({"name": "search_knowledge", "args": {"query": query}})
+        blocks.append(f"[search_knowledge: {query!r}]\n{r}")
+        try:
+            parsed = json.loads(r)
+            found_docs.extend(h["doc_id"] for h in parsed.get("hits", []))
+        except (json.JSONDecodeError, KeyError):
+            pass
+    for symptom in plan_tier4.get("incident_symptoms", []):
+        r = dispatch_tool("lookup_incident_history", {"symptom": symptom})
+        trace_calls.append({"name": "lookup_incident_history", "args": {"symptom": symptom}})
+        blocks.append(f"[lookup_incident_history: {symptom!r}]\n{r}")
+    for eq_id in plan_tier4.get("equipment_ids", []):
+        r1 = dispatch_tool("get_pm_history", {"equipment_id": eq_id})
+        trace_calls.append({"name": "get_pm_history", "args": {"equipment_id": eq_id}})
+        blocks.append(f"[get_pm_history: {eq_id!r}]\n{r1}")
+        r2 = dispatch_tool("check_pm_schedule", {"equipment_id": eq_id})
+        trace_calls.append({"name": "check_pm_schedule", "args": {"equipment_id": eq_id}})
+        blocks.append(f"[check_pm_schedule: {eq_id!r}]\n{r2}")
+    return "\n\n".join(blocks) if blocks else "(planner가 정보 수집 지시 없음)", found_docs
+
+
+def _run_response_conductor(
+    alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3,
+    plan: dict, trace: dict | None,
+) -> Tier4:
+    tool_log: list[dict] = []
+    knowledge, found_docs = _execute_tier4_plan(plan.get("tier4", {}), tool_log)
+
+    cause_lines = "\n".join(f"- {c['name']} ({c['pct']}%)" for c in tier2["causes"])
+    impact_lots_text = ", ".join(
+        f"{l['label']} {l['lots']}lot/{l['wafers']}장" for l in tier3["impact_lots"]
+    )
+    user_prompt = f"""## 이상 알람
+- 공정: {alarm['title']}, lot: {alarm['lot_id']}
+
+## Tier 1: 이상 점수 {tier1['score']}
+
+## Tier 2 원인 (기여도 순)
+{cause_lines}
+
+## Tier 3 영향
+- 예상 수율 손실: {tier3['yield_loss']} %p
+- 영향 WIP: {impact_lots_text}
+
+## 수집된 컨텍스트 (Planner 지정)
+{knowledge}
+
+위 컨텍스트만 사용해 immediate, longterm, ref_doc_ids를 산출하세요."""
+
+    resp = client().chat.completions.create(
+        model=SUBAGENT_MODEL,
+        messages=[
+            {"role": "system", "content": CONDUCTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "tier4_part", "schema": LLM_PART_SCHEMA, "strict": True},
+        },
+    )
+    llm_out = json.loads(resp.choices[0].message.content)
+
+    ref_ids = llm_out.get("ref_doc_ids") or found_docs[:4]
+    refs = [{"id": d, "desc": _doc_description(d)} for d in ref_ids if d]
+
+    if trace is not None:
+        trace["tool_calls"] = tool_log
+        trace["iterations"] = 0
+        trace["llm_calls"] = 1
+        trace["mode"] = "conductor"
+
+    return {
+        "immediate": llm_out["immediate"],
+        "longterm": llm_out["longterm"],
+        "refs": refs,
+    }
+
+
 @traceable(name="Tier4_Response_Agent", run_type="chain")
 def run_response(
-    alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3, trace: dict | None = None
+    alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3,
+    trace: dict | None = None,
+    plan: dict | None = None,
 ) -> Tier4:
+    """Tier 4 대응 권고. plan 제공 시 conductor 모드(LLM 1회), 아니면 autonomous loop."""
+    if plan is not None:
+        return _run_response_conductor(alarm, tier1, tier2, tier3, plan, trace)
+
+    # autonomous 모드 (LLM이 tool을 자율 호출하는 기존 loop)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": _initial_user_prompt(alarm, tier1, tier2, tier3)},
@@ -176,6 +278,7 @@ def run_response(
         trace["tool_calls"] = tool_call_log
         trace["iterations"] = iterations
         trace["llm_calls"] = iterations + 1
+        trace["mode"] = "autonomous"
 
     return {
         "immediate": llm_out["immediate"],
