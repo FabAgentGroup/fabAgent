@@ -14,7 +14,8 @@
 | **D6** | RAG paradigm 5단계 ablation | No RAG / Naive / FAISS / Hybrid / +Rerank | **Hybrid** | [rag_paradigm/results.md](rag_paradigm/results.md) |
 | **D7** | Workflow vs Agentic | 단일 LLM 호출 vs tool-using 루프 | **Agentic** | [agentic_vs_workflow/results.md](agentic_vs_workflow/results.md) |
 | **D8** | CRAG ON vs OFF | self-correction (grader + refinement) | CRAG **활성 유지** (관측 가치) | [crag_eval/results.md](crag_eval/results.md) |
-| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) | vs BAAI(영어) vs hybrid | 둘 다 hybrid에 미달 | [reranker_compare/results.md](reranker_compare/results.md) |
+| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) | vs BAAI(영어) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | [reranker_compare/results.md](reranker_compare/results.md) |
+| **D10** | D9 후속: 코퍼스 12→34 확장 후 reranker 재평가 | hybrid / BAAI / ko-reranker (34 docs) | **가설 검증 - 효과 완전 반전** | [reranker_compare/results.md](reranker_compare/results.md) |
 
 ## 핵심 결정 요약
 
@@ -149,7 +150,24 @@
 | 의미 우회 2 (yield 영향) | 0.817 | **0.867** | 0.617 | BAAI |
 | 의미 우회 3 (PM 가이드) | 0.517 | 0.550 | 0.533 | tie |
 
-**시행착오 (D6 → D9)**: D6에서 영어 reranker의 부진 원인을 "한국어 모델로 풀린다"고 가설. D9에서 검증한 결과 - **한국어 reranker가 CMP·lens cleanup 쿼리에선 명확히 우위지만, Etch·yield 쿼리에선 큰 손실**. 6 쿼리 평균은 hybrid baseline 미달. **결론: D6 가설의 진짜 문제는 영어/한국어가 아니라 코퍼스 규모**. ~10문서에선 hybrid top-3이 이미 정밀해 reranker가 더 좋게 정렬할 여지 부족. 채택 결정: **hybrid 유지, ko-reranker는 환경변수 옵션(`RERANK_MODEL=Dongjin-kr/ko-reranker`)으로만 보존**. 코퍼스 100+ 확장이 reranker 효용의 선결조건임을 두 번 확인.
+**시행착오 (D6 → D9)**: D6에서 영어 reranker의 부진 원인을 "한국어 모델로 풀린다"고 가설. D9에서 검증한 결과 - **한국어 reranker가 CMP·lens cleanup 쿼리에선 명확히 우위지만, Etch·yield 쿼리에선 큰 손실**. 6 쿼리 평균은 hybrid baseline 미달. **결론: D6 가설의 진짜 문제는 영어/한국어가 아니라 코퍼스 규모**. 이 가설을 D10에서 정량 검증.
+
+### D10. 확장 코퍼스(34 docs)에서 reranker 효과 검증 → **가설 입증, 효과 완전 반전**
+
+| 모드 | D9 (12 docs) | **D10 (34 docs)** | 변화 |
+|---|---|---|---|
+| hybrid (no rerank) | 0.734 | **0.592** | -0.142 (noise↑) |
+| BAAI/bge-reranker-base | 0.714 (-0.020) | **0.709 (+0.117)** | **반전!** |
+| Dongjin-kr/ko-reranker | 0.703 (-0.031) | **0.675 (+0.083)** | **반전!** |
+
+![Reranker 비교 (D10, 34 docs)](reranker_compare/charts/reranker_comparison.png)
+
+**시리즈 의의 (D6 → D9 → D10)**:
+- **D6**: production 표준이 작은 코퍼스에서 역효과 발견 ("rerank가 무조건 좋다"는 통념 정량 반박)
+- **D9**: 한국어 reranker로도 안 풀림 → 영어/한국어 문제가 아니라 "**코퍼스 규모가 진짜 원인**"이라는 가설 제시
+- **D10**: 코퍼스 12 → 34 확장 후 재실행. **hybrid baseline -0.14, reranker 효과 +0.12로 완전 반전** → 가설 정량 입증
+
+**핵심 메시지**: 정량 평가 없이는 잘못된 통념을 그대로 끌고 갈 뻔했고, 정량 평가 덕분에 진짜 원인을 분리하고 검증할 수 있었다. 채택: 코퍼스 30+ 환경에서는 `RAG_BACKEND=hybrid_rerank` 권장, 데모용 코퍼스는 hybrid 유지.
 
 ## 실행 방법
 

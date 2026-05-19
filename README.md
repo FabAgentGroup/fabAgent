@@ -120,7 +120,8 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 | **D6** | RAG paradigm 5단계 ablation | **Hybrid** 채택 | faithfulness: No RAG 0.32 → Hybrid 0.82 (2.5x). Hybrid가 모든 지표 1위 |
 | **D7** | Workflow vs Agentic 비교 | **Agentic** 채택 | tool 0→13, 인용 깊이 +25%, 비용 2.6x, latency 2.3x, reasoning trace 확보 |
 | **D8** | CRAG (Self-correction) ON vs OFF | CRAG **활성 유지** (관측 가치) | 품질 변화 -0.1%p (동급), refinement 발동률 20%, relevance_score 노출, 비용 +31% |
-| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) vs 영어(BAAI) vs hybrid | 둘 다 hybrid에 미달 | hybrid 0.734 / BAAI 0.714 / ko 0.703 (D6 결론 재확인, 쿼리별로는 ko가 CMP·lens 우위) |
+| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) vs 영어(BAAI) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | hybrid 0.734 / BAAI 0.714 / ko 0.703 |
+| **D10** | **D9 후속**: 코퍼스 12→34 확장 후 reranker 재평가 | **가설 검증 - 효과 완전 반전** | hybrid **0.592** / BAAI **0.709 (+0.117)** / ko **0.675 (+0.083)** |
 
 ### D6 핵심 그래프
 
@@ -210,7 +211,24 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 - **결과**: hybrid 0.734 (baseline), BAAI 0.714 (-0.020), **ko-reranker 0.703 (-0.031)**
 - **반전 안에 반전**: 쿼리별로 보면 ko-reranker가 CMP(+0.10), 의미 우회 1(+0.083)에선 우위. Etch(-0.18), 의미 우회 2(-0.20)에선 손실. 전체 평균은 무승부
 - **해석**: 한국어 reranker가 영어보단 도메인 적합성 약간 우위지만, **본 코퍼스 규모(~10문서)에선 hybrid top-3이 이미 충분히 정밀해 어떤 reranker도 의미 있는 이득 없음**
-- **결론**: D6 가설 부분적 재확인 - 한국어 reranker 채택 보류, hybrid 단독 유지. 코퍼스 100+ 확장이 reranker 효용 가시화의 선결조건임을 두 번 확인
+- **결론(잠정)**: D6 가설 부분적 재확인 - 코퍼스 규모가 진짜 원인이라는 더 큰 가설을 제시
+
+### 10. 코퍼스 12 → 34 확장 + D10으로 가설 검증
+
+- **시작**: D9까지 누적된 가설 "코퍼스 규모가 reranker 효용의 선결조건". 이를 정량 검증하려면 코퍼스 확장 필수
+- **방법**: 합법적 공개 자료로 12개 → 34개 확장
+  - 한국어 위키백과 12개 (반도체 공정 전반: Photo/Etch/CMP/이온주입/박막/포토레지스트/EUV 등)
+  - SK하이닉스 뉴스룸 6개 (실제 산업 운영 관점: 식각·포토·CMP·세정)
+  - 삼성반도체 공식 3개 (8대 공정·용어집·EUV)
+  - SKC 소재 1개, PHM Society 2016 챌린지 1개
+  - 모든 출처는 CC BY-SA 또는 공개 자료, 파일별 attribution 명시
+- **D10 결과 (re-run D9 with 34 docs)**:
+  - hybrid: 0.734 → **0.592** (-0.142, noise 증가)
+  - BAAI: -0.020 → **+0.117** (반전!)
+  - ko-reranker: -0.031 → **+0.083** (반전!)
+- **검증 완료**: 가설 정확히 입증. 확장 코퍼스에서는 BM25/FAISS가 일반 자료 noise를 흡수하지만 cross-encoder가 그중에서 정답을 골라냄
+- **결정**: 코퍼스 30+ 환경에서는 `RAG_BACKEND=hybrid_rerank` 권장. 데모용 12개에선 hybrid 유지
+- **시리즈 의의**: D6 → D9 → D10이 portfolio narrative로 완성. "통념 → 정량 반박 → 가설 → 정량 검증"의 사이클이 정량 평가의 가치 자체를 증명
 
 ### 8. Supervisor agent - LLM-driven 동적 workflow routing
 
@@ -348,7 +366,7 @@ fabagent/
 ## 한계와 향후 확장
 
 - **SECOM의 익명성**: 590개 센서가 어느 공정·물리량인지 비공개라 A1/A2의 step 라벨은 시연용 narrative
-- **knowledge 문서**: 시연용 합성 도메인 문서 (실 fab의 사내 SOP·인시던트 DB로 교체 가능)
+- **knowledge 문서**: 합성 12개 + 공개 자료(위키/SK하이닉스/삼성/SKC/PHM) 22개 = **총 34개**. 실 fab 수천 문서 대비 여전히 작지만, D10에서 코퍼스 규모와 reranker 효용의 관계는 정량 검증됨
 - **도구 mock data**: PM 이력·yield baseline·downstream 의존성은 in-memory mock (실 fab은 MES/EAP/YMS 어댑터로 교체)
 - **한국어 reranker 검증 완료(D9)**: hybrid 단독에 미달, 코퍼스 확장이 reranker 효용의 선결조건임을 확인
 - **Supervisor fast_track 시연 부재**: 현 3개 데모 알람은 모두 proceed_full 선택 - fast_track/escalate 시연을 위해선 더 다양한 알람 시나리오 필요
