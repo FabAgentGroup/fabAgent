@@ -21,6 +21,8 @@ LLM 호출 패턴:
 """
 import json
 
+from langsmith import traceable
+
 from agents.tools import equipment, incident, knowledge, process
 
 _REGISTRY = {
@@ -53,6 +55,7 @@ TOOLS_RESPONSE = [
 ]
 
 
+@traceable(name="tool_call", run_type="tool")
 def dispatch_tool(name: str, args: dict) -> str:
     """tool 함수를 이름으로 호출, 결과를 JSON string으로 반환 (LLM 입력용)"""
     fn = _REGISTRY.get(name)

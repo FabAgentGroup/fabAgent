@@ -7,6 +7,8 @@ yield_loss와 영향 받는 후공정 목록을 산출합니다.
 """
 import json
 
+from langsmith import traceable
+
 from agents.cause import _assistant_msg_dict
 from agents.llm import SUBAGENT_MODEL, client
 from agents.tools import TOOLS_IMPACT, dispatch_tool
@@ -85,6 +87,7 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2) -> str:
 WIP·downstream·yield·PM 컨텍스트는 도구를 호출해 자율적으로 수집하세요."""
 
 
+@traceable(name="Tier3_Impact_Agent", run_type="chain")
 def run_impact(alarm: dict, tier1: Tier1, tier2: Tier2, trace: dict | None = None) -> Tier3:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
