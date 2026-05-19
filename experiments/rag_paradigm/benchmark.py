@@ -38,7 +38,17 @@ from ragas.metrics import (
     ResponseRelevancy,
 )
 
-from agents.cause import SYSTEM_PROMPT, TIER2_SCHEMA
+from agents.cause import TIER2_SCHEMA
+
+# workflow 모드 (사전 retrieve 후 단일 LLM 호출)에 적합한 prompt
+# agents.cause의 SYSTEM_PROMPT는 agentic 모드(tool 자율 호출) 전용이라 별도 정의
+WORKFLOW_SYSTEM_PROMPT = """당신은 반도체 공정 원인 분석 전문가입니다.
+주어진 이상 알람과 탐지 결과, 사내 지식 문서를 근거로 가장 가능성 높은 원인을
+2~3개 추정합니다. 각 원인은 기여도(pct, %)를 가지며 합이 100에 가깝도록 합니다.
+근거(evidence)는 제공된 문서 내용에 기반해 구체적으로 작성하고, citations에는
+근거가 된 문서 ID만 정확히 기입합니다. 제공되지 않은 문서는 인용하지 않습니다.
+기여도가 높은 원인부터 순서대로 제시합니다.
+반드시 JSON 스키마에 맞춰 응답하세요."""
 
 
 def _build_query(alarm: dict, tier1) -> str:
@@ -99,7 +109,7 @@ def _run_cause_with_contexts(alarm: dict, tier1: dict, contexts: list[str]) -> d
     resp = client().chat.completions.create(
         model=SUBAGENT_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": WORKFLOW_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
         response_format={
@@ -107,7 +117,15 @@ def _run_cause_with_contexts(alarm: dict, tier1: dict, contexts: list[str]) -> d
             "json_schema": {"name": "tier2", "schema": TIER2_SCHEMA, "strict": True},
         },
     )
-    return json.loads(resp.choices[0].message.content)
+    content = resp.choices[0].message.content or "{}"
+    # 일부 모델이 ```json ... ``` fence를 붙이는 경우 방어
+    if content.strip().startswith("```"):
+        parts = content.split("```")
+        if len(parts) >= 2:
+            content = parts[1]
+            if content.startswith("json"):
+                content = content[4:]
+    return json.loads(content.strip())
 
 
 def _format_answer(tier2: dict) -> str:
