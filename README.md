@@ -24,7 +24,10 @@ auditable한 reasoning trace를 제공합니다.
 
 - **4-Tier multi-agent system** - 탐지(ML) · 원인(agentic RAG) · 영향(tool-using) · 대응(tool-using)
 - **Tool-using agent** - 7개 도메인 도구를 LLM이 자율 선택·반복 호출 (OpenAI function calling)
-- **조건부 라우팅** - LangGraph에서 severity gate + cause confidence retry 분기
+- **Supervisor agent** - LLM이 Tier 2 결과를 보고 후속 workflow path(proceed_full / fast_track / escalate) 동적 결정
+- **조건부 라우팅** - LangGraph에서 severity gate + cause confidence retry + supervisor 분기 (3단계)
+- **CRAG self-correction** - retrieval grader가 검색 품질 평가, 임계치 미달 시 쿼리 자동 재작성
+- **LangSmith observability** - 모든 LLM·tool·agent 호출 자동 트레이스 (production-grade)
 - **Production RAG** - BM25 + FAISS + Reciprocal Rank Fusion (5단계 paradigm ablation으로 검증)
 - **실데이터 기반** - UCI SECOM (590 익명 센서) + PHM 2016 CMP (25개 명명 센서, 실측)
 - **자가 학습 루프** - 운영자 승인 시 분석 결과가 인시던트 DB(.md)에 자동 기록 → 다음 RAG에 즉시 반영
@@ -40,19 +43,31 @@ auditable한 reasoning trace를 제공합니다.
 └──────┬───────┘
        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ agents/orchestrator.py - LangGraph StateGraph (조건부 라우팅)                │
+│ agents/orchestrator.py - LangGraph StateGraph (조건부 + LLM-driven 라우팅)  │
 │                                                                             │
-│   START → [detect] ──── score ≥ 0.30 ──→ [cause] ┐                          │
-│              │                                    │                          │
-│              └── score < 0.30 ──→ [noise] → END   │                          │
-│                                                   │                          │
-│           ┌─── max(pct) < 40% ───→ [cause_retry] ─┘                          │
-│   [cause]─┤                                       │                          │
-│           └─── max(pct) ≥ 40% ───────────────────→[impact] →[response]→ END │
+│   START → [detect] ──── score < 0.30 ──→ [noise] → END    (severity gate)   │
+│              │                                                              │
+│              └── score ≥ 0.30 ──→ [cause]                                   │
+│                                     │                                       │
+│                  ┌──── max pct < 40% ─────→ [cause_retry] ──┐               │
+│                  │ (output threshold)                       │               │
+│                  └──── max pct ≥ 40% ──→ [supervisor] ←─────┘               │
+│                                              │                              │
+│                       ┌─── LLM 결정 ────────┤                              │
+│                       │ proceed_full        │                              │
+│                       │ escalate            ▼                              │
+│                       │                  [impact] ──┐                       │
+│                       │                              ▼                      │
+│                       │ fast_track ──→ [fast_impact] → [response] → END    │
+│                       │                              ▲                      │
+│                       │                              │                      │
+│                       └──────────────────────────────┘                      │
 │                                                                             │
 │   Tier 1: IsolationForest (ML) - SECOM/PHM 데이터 분기                       │
 │   Tier 2: agentic RAG (tools: search_knowledge, lookup_incident, get_pm)    │
+│   Supervisor (gpt-4o-mini): action·severity·reasoning을 LLM이 결정          │
 │   Tier 3: tool-using (query_wip, get_downstream, get_yield_baseline, pm)    │
+│   fast_impact: LLM 호출 없는 deterministic 경량 처리 (fast_track 전용)      │
 │   Tier 4: tool-using (search, lookup_incident, get_pm, check_pm_schedule)   │
 └─────────────────────────┬───────────────────────────────────────────────────┘
                           ▼
@@ -105,6 +120,7 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 | **D6** | RAG paradigm 5단계 ablation | **Hybrid** 채택 | faithfulness: No RAG 0.32 → Hybrid 0.82 (2.5x). Hybrid가 모든 지표 1위 |
 | **D7** | Workflow vs Agentic 비교 | **Agentic** 채택 | tool 0→13, 인용 깊이 +25%, 비용 2.6x, latency 2.3x, reasoning trace 확보 |
 | **D8** | CRAG (Self-correction) ON vs OFF | CRAG **활성 유지** (관측 가치) | 품질 변화 -0.1%p (동급), refinement 발동률 20%, relevance_score 노출, 비용 +31% |
+| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) vs 영어(BAAI) vs hybrid | 둘 다 hybrid에 미달 | hybrid 0.734 / BAAI 0.714 / ko 0.703 (D6 결론 재확인, 쿼리별로는 ko가 CMP·lens 우위) |
 
 ### D6 핵심 그래프
 
@@ -187,6 +203,33 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
   - 비용 +31% 절대값 미미 (1000 알람당 +$2.90)
   - 코퍼스 100+ 확장 또는 한국어 reranker 도입 시 재평가 권장
 
+### 7. 한국어 reranker 후속 평가 - D6 가설 검증 (D9)
+
+- **시작**: D6에서 "영어 학습 reranker가 한국어 코퍼스에서 효과 없음" 가설 제시. `Dongjin-kr/ko-reranker`로 검증
+- **방법**: `rerank.py`에 `RERANK_MODEL` 환경변수 추가, 6개 대표 쿼리 × 3 모드(hybrid / BAAI / ko-reranker)로 CRAG grader 채점
+- **결과**: hybrid 0.734 (baseline), BAAI 0.714 (-0.020), **ko-reranker 0.703 (-0.031)**
+- **반전 안에 반전**: 쿼리별로 보면 ko-reranker가 CMP(+0.10), 의미 우회 1(+0.083)에선 우위. Etch(-0.18), 의미 우회 2(-0.20)에선 손실. 전체 평균은 무승부
+- **해석**: 한국어 reranker가 영어보단 도메인 적합성 약간 우위지만, **본 코퍼스 규모(~10문서)에선 hybrid top-3이 이미 충분히 정밀해 어떤 reranker도 의미 있는 이득 없음**
+- **결론**: D6 가설 부분적 재확인 - 한국어 reranker 채택 보류, hybrid 단독 유지. 코퍼스 100+ 확장이 reranker 효용 가시화의 선결조건임을 두 번 확인
+
+### 8. Supervisor agent - LLM-driven 동적 workflow routing
+
+- **시작**: 기존 conditional edge는 threshold 기반(`score < 0.3` → skip, `max pct < 40` → retry). "진짜 agent라면 LLM이 맥락을 보고 결정해야 한다"
+- **구현**: `agents/supervisor.py` - Tier 2 결과를 받아 3가지 action 결정
+  - `proceed_full` (표준): Tier 3 → Tier 4
+  - `fast_track` (단일 원인 우세): Tier 3 LLM skip, deterministic 경량 처리로 비용 절감
+  - `escalate` (고위험): 정상 진행 + human review 플래그 (Tier 4 immediate 첫 항목에 🚨 prepend)
+- **모델**: gpt-4o-mini (의사결정 소작업, 비용 절감)
+- **LangGraph 시각화**: 3개 분기 노드 (detect, cause, supervisor) - 정적 + LLM-driven 라우팅의 조합
+- **smoke test**: A1 (medium severity, 3 causes) → proceed_full, A2/A3 (high severity) → proceed_full. 현 데이터에선 모두 표준 경로 선택 (안전한 기본)
+
+### 9. LangSmith observability 통합
+
+- **목적**: production-grade 트레이스 대시보드. 알람별 LLM 호출 트리, tool 호출 시퀀스, latency·token 분석
+- **구현**: `wrap_openai`로 모든 chat.completions.create 자동 트레이스, `@traceable` 데코레이터로 4-Tier agent + Supervisor + tool dispatcher를 nested run으로 시각화
+- **토글**: 환경변수 `LANGSMITH_TRACING=true/false`로 on/off, 비활성 시 no-op (성능·기능 영향 없음)
+- **포트폴리오 가치**: 인터뷰에서 "각 LLM 호출·tool 호출·token·latency 다 보입니다" 한 줄로 production-grade 인상
+
 ## 실행
 
 ### 로컬
@@ -256,7 +299,8 @@ fabagent/
 │   ├── cause.py                 # Tier 2 agentic RAG (tool-calling loop)
 │   ├── impact.py                # Tier 3 tool-using agent
 │   ├── response.py              # Tier 4 tool-using agent
-│   ├── llm.py                   # OpenAI 클라이언트 + 모델 설정
+│   ├── supervisor.py            # LLM-driven dynamic workflow router (proceed_full/fast_track/escalate)
+│   ├── llm.py                   # OpenAI 클라이언트 + LangSmith wrap_openai 통합
 │   ├── tools/                   # 7개 agent 도구
 │   │   ├── knowledge.py         #   search_knowledge (RAG 검색)
 │   │   ├── incident.py          #   lookup_incident_history
@@ -282,7 +326,8 @@ fabagent/
 │   ├── rag_eval/                # RAGAS 평가 (hybrid vs hybrid_rerank)
 │   ├── rag_paradigm/            # D6: 5단계 paradigm ablation
 │   ├── agentic_vs_workflow/     # D7: workflow vs agentic 비교
-│   └── crag_eval/               # D8: CRAG self-correction 효과 평가
+│   ├── crag_eval/               # D8: CRAG self-correction 효과 평가
+│   └── reranker_compare/        # D9: 한국어 reranker(Dongjin-kr/ko-reranker) 평가
 ├── docs/orchestrator_graph.mmd  # LangGraph 자동 추출 mermaid
 ├── styles/main.css              # 디자인 시스템
 └── tests/
@@ -292,7 +337,8 @@ fabagent/
 
 - **프론트**: Streamlit 1.36+
 - **백엔드**: OpenAI SDK (`gpt-5-mini`, structured output + function calling)
-- **Orchestration**: LangGraph StateGraph (조건부 라우팅 + mermaid 추출)
+- **Orchestration**: LangGraph StateGraph (조건부 + LLM-driven 라우팅, mermaid 추출)
+- **Observability**: LangSmith (`wrap_openai` + `@traceable`, 옵션)
 - **ML**: scikit-learn (IsolationForest, LOF, OC-SVM)
 - **RAG**: rank-bm25 + sentence-transformers + FAISS + RRF (옵션: cross-encoder rerank)
 - **평가**: RAGAS (faithfulness, answer_relevancy, context_precision) with gpt-4o-mini
@@ -304,5 +350,6 @@ fabagent/
 - **SECOM의 익명성**: 590개 센서가 어느 공정·물리량인지 비공개라 A1/A2의 step 라벨은 시연용 narrative
 - **knowledge 문서**: 시연용 합성 도메인 문서 (실 fab의 사내 SOP·인시던트 DB로 교체 가능)
 - **도구 mock data**: PM 이력·yield baseline·downstream 의존성은 in-memory mock (실 fab은 MES/EAP/YMS 어댑터로 교체)
-- **한국어 reranker 미테스트**: 영어 학습 `bge-reranker-base`로는 효과 부재 검증, `dongjin-kr/ko-reranker`로 재평가 권장
-- **고도화 방향**: GraphRAG(공정 의존성 노드 그래프) · CRAG(retrieval grader 기반 self-correction) · LangSmith observability · 실 MES/SPC 어댑터 연동
+- **한국어 reranker 검증 완료(D9)**: hybrid 단독에 미달, 코퍼스 확장이 reranker 효용의 선결조건임을 확인
+- **Supervisor fast_track 시연 부재**: 현 3개 데모 알람은 모두 proceed_full 선택 - fast_track/escalate 시연을 위해선 더 다양한 알람 시나리오 필요
+- **고도화 방향**: GraphRAG(공정 의존성 노드 그래프) · 실 MES/EAP/YMS 어댑터 · 한국어 reranker 전용 fine-tuning · 멀티 에이전트 negotiation (현재는 supervisor가 일방향 라우팅)

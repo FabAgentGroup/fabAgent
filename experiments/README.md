@@ -14,6 +14,7 @@
 | **D6** | RAG paradigm 5단계 ablation | No RAG / Naive / FAISS / Hybrid / +Rerank | **Hybrid** | [rag_paradigm/results.md](rag_paradigm/results.md) |
 | **D7** | Workflow vs Agentic | 단일 LLM 호출 vs tool-using 루프 | **Agentic** | [agentic_vs_workflow/results.md](agentic_vs_workflow/results.md) |
 | **D8** | CRAG ON vs OFF | self-correction (grader + refinement) | CRAG **활성 유지** (관측 가치) | [crag_eval/results.md](crag_eval/results.md) |
+| **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) | vs BAAI(영어) vs hybrid | 둘 다 hybrid에 미달 | [reranker_compare/results.md](reranker_compare/results.md) |
 
 ## 핵심 결정 요약
 
@@ -127,6 +128,29 @@
 
 **시행착오**: Anthropic·LangChain이 CRAG를 production 패턴으로 자주 언급. 단순 구현(grader + refiner) + smoke test에서 인상적 작동 확인. 그러나 정량 비교에서 **품질 변화 미미** - D6 Rerank와 같은 패턴. 작은 도메인 코퍼스에선 정교한 self-correction이 ROI 낮음. 정량 평가 없이는 "CRAG 도입했음" 마케팅으로 끝났을 것. 결정: **활성 유지하되 코퍼스 확장 시 재평가** (인용 신뢰도 노출이라는 부수 가치는 유지).
 
+### D9. 한국어 reranker → **채택 보류** (D6 가설 부분적 재확인)
+
+| 모드 | 평균 LLM relevance | rerank latency | vs hybrid baseline |
+|---|---|---|---|
+| **hybrid (no rerank)** | **0.734** | 0 ms | baseline |
+| BAAI/bge-reranker-base (영어) | 0.714 | 315 ms | -0.020 |
+| Dongjin-kr/ko-reranker (한국어) | 0.703 | 826 ms | -0.031 |
+
+![Reranker 비교](reranker_compare/charts/reranker_comparison.png)
+
+**쿼리별 패턴**:
+
+| 쿼리 | hybrid | BAAI | ko | 우승자 |
+|---|---|---|---|---|
+| Photo CD 직접 | 0.867 | 0.817 | 0.867 | hybrid / ko (tie) |
+| CMP 직접 | 0.750 | 0.767 | **0.850** | **ko (+0.10)** |
+| Etch 직접 | 0.750 | 0.650 | 0.567 | hybrid |
+| 의미 우회 1 (lens 청소) | 0.700 | 0.633 | **0.783** | **ko (+0.083)** |
+| 의미 우회 2 (yield 영향) | 0.817 | **0.867** | 0.617 | BAAI |
+| 의미 우회 3 (PM 가이드) | 0.517 | 0.550 | 0.533 | tie |
+
+**시행착오 (D6 → D9)**: D6에서 영어 reranker의 부진 원인을 "한국어 모델로 풀린다"고 가설. D9에서 검증한 결과 - **한국어 reranker가 CMP·lens cleanup 쿼리에선 명확히 우위지만, Etch·yield 쿼리에선 큰 손실**. 6 쿼리 평균은 hybrid baseline 미달. **결론: D6 가설의 진짜 문제는 영어/한국어가 아니라 코퍼스 규모**. ~10문서에선 hybrid top-3이 이미 정밀해 reranker가 더 좋게 정렬할 여지 부족. 채택 결정: **hybrid 유지, ko-reranker는 환경변수 옵션(`RERANK_MODEL=Dongjin-kr/ko-reranker`)으로만 보존**. 코퍼스 100+ 확장이 reranker 효용의 선결조건임을 두 번 확인.
+
 ## 실행 방법
 
 ```bash
@@ -152,6 +176,9 @@
 
 # CRAG ON vs OFF (D8)
 .venv/bin/python -m experiments.crag_eval.benchmark
+
+# 한국어 reranker (Dongjin-kr/ko-reranker) 평가 (D9)
+.venv/bin/python -m experiments.reranker_compare.benchmark
 ```
 
 각 실험은 `results.md`와 `charts/*.png`를 생성합니다.
