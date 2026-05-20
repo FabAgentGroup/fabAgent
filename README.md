@@ -155,7 +155,7 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 
 ![비용 비교](experiments/conductor_vs_autonomous/charts/cost_comparison.png)
 
-## 시행착오 (Journey)
+## 시행착오
 
 이 시스템이 처음부터 이 모양이었던 건 아닙니다. 실제로 다음 다섯 번의 큰 방향 전환을 거쳤습니다.
 
