@@ -14,7 +14,12 @@ REAL_AGENT_ALARMS = {"A1", "A2", "A3"}
 
 
 def get_tier_data(alarm_id: str) -> TierData | None:
-    """알람 ID로 4-Tier 분석 결과를 반환, 데이터가 없으면 None"""
+    """알람/incident ID로 4-Tier 분석 결과를 반환, 데이터가 없으면 None"""
+    # 트리아지 incident 핸드오프 (Tier 0 -> 4-Tier)
+    if alarm_id.startswith("TRIAGE-"):
+        from agents.orchestrator import run_orchestrator_for_incident
+
+        return run_orchestrator_for_incident(alarm_id)
     if alarm_id in REAL_AGENT_ALARMS:
         from agents.orchestrator import run_orchestrator
 

@@ -61,6 +61,13 @@ def handle_query_params():
         alarm_id = st.query_params["alarm"]
         ss = st.session_state
         ss.view = "analysis"
+        # 트리아지 incident 핸드오프 - 표시용 alarm을 인박스에 등록
+        if alarm_id.startswith("TRIAGE-") and not any(a["id"] == alarm_id for a in ss.alarms):
+            from components.triage_board import incident_display_alarm
+
+            stub = incident_display_alarm(alarm_id)
+            if stub:
+                ss.alarms.append(stub)
         if alarm_id != ss.get("selected_alarm_id"):
             ss.selected_alarm_id = alarm_id
             ss.stage = 0
