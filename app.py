@@ -10,6 +10,7 @@ from components.alarm_inbox import render_alarm_inbox
 from components.header import render_header
 from components.progress import render_progress_strip
 from components.tiers import render_tier_cascade
+from components.audit_board import render_audit_board
 from components.maintenance_board import render_maintenance_board
 from components.triage_board import render_triage_board
 from data.demo import DEFAULT_ALARMS
@@ -97,6 +98,7 @@ def render_nav():
     t_active = "active" if ss.view == "triage" else ""
     a_active = "active" if ss.view == "analysis" else ""
     m_active = "active" if ss.view == "maintenance" else ""
+    g_active = "active" if ss.view == "audit" else ""
     st.html(
         '<style>'
         '.fab-nav { display:flex; gap:8px; margin: 2px 0 14px; }'
@@ -109,6 +111,7 @@ def render_nav():
         f'<a href="?view=triage" target="_self" class="{t_active}">Tier 0 트리아지</a>'
         f'<a href="?view=analysis" target="_self" class="{a_active}">심층 분석 (4-Tier)</a>'
         f'<a href="?view=maintenance" target="_self" class="{m_active}">예지보전</a>'
+        f'<a href="?view=audit" target="_self" class="{g_active}">감사 로그</a>'
         '</div>'
     )
 
@@ -154,5 +157,7 @@ if st.session_state.view == "triage":
     render_triage_board()
 elif st.session_state.view == "maintenance":
     render_maintenance_board()
+elif st.session_state.view == "audit":
+    render_audit_board()
 else:
     render_main()
