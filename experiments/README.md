@@ -17,6 +17,7 @@
 | **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) | vs BAAI(영어) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | [reranker_compare/results.md](reranker_compare/results.md) |
 | **D10** | D9 후속: 코퍼스 12→34 확장 후 reranker 재평가 | hybrid / BAAI / ko-reranker (34 docs) | **가설 검증 - 효과 완전 반전** | [reranker_compare/results.md](reranker_compare/results.md) |
 | **D11** | Conductor (Plan-and-Execute) vs Autonomous | 4 LLM call vs 10 LLM call | **Conductor 채택** (속도·비용 우위, 품질 동등) | [conductor_vs_autonomous/results.md](conductor_vs_autonomous/results.md) |
+| **D12** | Tier 0 트리아지 + 커몬낼리티 엔진 | 알람 폭주 압축 · 커몬낼리티 vs sigma baseline | **압축 132x · nuisance 98% 억제 · commonality hit@1 3/3** | [triage_eval/results.md](triage_eval/results.md) |
 
 ## 핵심 결정 요약
 
