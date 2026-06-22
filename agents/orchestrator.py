@@ -59,6 +59,9 @@ class _GraphState(TypedDict, total=False):
 
 
 def _node_detect(state: _GraphState) -> dict:
+    # tier1이 이미 주입돼 있으면 패스스루 (트리아지 incident 핸드오프 경로)
+    if state.get("tier1"):
+        return {"tier1": state["tier1"]}
     return {"tier1": run_detection(state["alarm"])}
 
 
@@ -78,7 +81,16 @@ def _node_noise(state: _GraphState) -> dict:
 # ==================== Conductor 모드 노드 ====================
 
 def _node_planner(state: _GraphState) -> dict:
-    return {"plan": plan_workflow(state["alarm"], state["tier1"])}
+    plan = plan_workflow(state["alarm"], state["tier1"])
+    # incident 핸드오프: 트리아지가 산출한 커몬낼리티 scope를 강제 주입
+    scope = state["alarm"].get("_commonality_scope")
+    if scope:
+        plan["tier2"]["commonality"] = {
+            "process": scope.get("process", "") or "",
+            "scope_tool": scope.get("scope_tool", "") or "",
+            "scope_recipe": scope.get("scope_recipe", "") or "",
+        }
+    return {"plan": plan}
 
 
 def _route_after_planner(state: _GraphState) -> str:
@@ -234,3 +246,89 @@ def run_orchestrator(alarm_id: str) -> TierData:
         "tier3": final["tier3"],
         "tier4": final["tier4"],
     }
+
+
+# ==================== 트리아지 incident -> 4-Tier 핸드오프 ====================
+
+def _incident_to_alarm(incident: dict) -> dict:
+    """트리아지 incident를 오케스트레이터 입력 alarm dict로 변환"""
+    critical = incident.get("risk_score", 0) >= 80
+    return {
+        "id": incident["incident_id"],
+        "status": "critical" if critical else "warn",
+        "title": f"{incident['process']} {incident['param']} 이상",
+        "lot_id": incident["dominant_tool"],
+        "feature": incident["param"],
+        "feature_arrow": "",
+        "time": "방금 전",
+        "equipment_id": incident["dominant_tool"],
+        "_commonality_scope": _scope_for_incident(incident),
+    }
+
+
+def _incident_to_tier1(incident: dict, commonality: dict) -> Tier1:
+    """incident + 커몬낼리티로 Tier1을 직접 구성 (detection 우회)
+
+    이상 점수는 max sigma를 0~1로 정규화, 기여 피처는 param + 상위 정량 용의자
+    """
+    score = round(min(1.0, incident["max_sigma"] / 8.0), 2)
+    features = [{"name": incident["param"], "value": round(incident["max_sigma"], 2)}]
+    for s in commonality.get("suspects", [])[:2]:
+        features.append({"name": f"{s['dim_label']} {s['value']}", "value": s["lift"]})
+    return {
+        "score": score,
+        "features": features[:3],
+        "lot": {"id": incident["dominant_tool"], "wafers": _incident_wafers(incident)},
+    }
+
+
+def _incident_wafers(incident: dict) -> int:
+    return incident["n_alarms"] * 5
+
+
+def _incident_wip(incident: dict) -> list:
+    """incident 영향 웨이퍼를 가공중/대기중 WIP로 분할"""
+    total = _incident_wafers(incident)
+    in_proc = total * 2 // 5
+    waiting = total - in_proc
+    return [
+        {"label": "가공 중", "lots": max(1, in_proc // 25), "wafers": in_proc},
+        {"label": "대기 중", "lots": max(1, waiting // 25), "wafers": waiting},
+    ]
+
+
+@lru_cache(maxsize=8)
+def run_orchestrator_for_incident(incident_id: str) -> TierData:
+    """트리아지 incident ID로 4-Tier 분석 실행
+
+    detection을 우회하고 incident에서 Tier1을 구성, 커몬낼리티를 cause에 주입한다
+    incident는 트리아지를 재실행해 ID로 조회 (결정론)
+    """
+    from agents.commonality import commonality_for_incident
+    from agents.triage import triage
+    from data.fdc.stream import load_alarm_stream
+    from data.wip import register_wip
+
+    incidents = triage(load_alarm_stream())["incidents"]
+    incident = next((i for i in incidents if i["incident_id"] == incident_id), None)
+    if incident is None:
+        raise ValueError(f"트리아지 incident를 찾을 수 없음: {incident_id}")
+
+    comm = commonality_for_incident(incident)
+    alarm = _incident_to_alarm(incident)
+    tier1 = _incident_to_tier1(incident, comm)
+    register_wip(alarm["id"], _incident_wip(incident))
+
+    graph = build_graph(_agent_mode())
+    final = graph.invoke({"alarm": alarm, "tier1": tier1})
+    return {
+        "tier1": final["tier1"],
+        "tier2": final["tier2"],
+        "tier3": final["tier3"],
+        "tier4": final["tier4"],
+    }
+
+
+def _scope_for_incident(incident: dict) -> dict:
+    from agents.commonality import scope_for_incident
+    return scope_for_incident(incident)
