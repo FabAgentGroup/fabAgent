@@ -70,7 +70,7 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2) -> str:
     cause_lines = "\n".join(
         f"- {c['name']} ({c['pct']}%): {c['evidence'][:120]}" for c in tier2["causes"]
     )
-    equipment_id = ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
+    equipment_id = alarm.get("equipment_id") or ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
     current_stage = _stage_from_alarm(alarm)
     return f"""## 이상 알람
 - 공정: {alarm['title']} (current_stage: {current_stage})

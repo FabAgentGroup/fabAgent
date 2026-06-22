@@ -65,7 +65,7 @@ SYSTEM_PROMPT = """당신은 반도체 공정 원인 분석 전문가입니다.
 
 def _initial_user_prompt(alarm: dict, tier1: Tier1) -> str:
     sensors = ", ".join(f["name"] for f in tier1["features"])
-    equipment_id = ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
+    equipment_id = alarm.get("equipment_id") or ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
     return f"""## 이상 알람
 - 공정: {alarm['title']}
 - lot: {alarm['lot_id']}
