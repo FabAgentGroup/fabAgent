@@ -96,7 +96,7 @@ def _initial_user_prompt(alarm: dict, tier1: Tier1, tier2: Tier2, tier3: Tier3) 
     downstream_text = ", ".join(
         f"{d['stage']}({d.get('delta', '')})" for d in tier3["dependencies"]
     )
-    equipment_id = ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
+    equipment_id = alarm.get("equipment_id") or ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
     return f"""## 이상 알람
 - 공정: {alarm['title']}
 - lot: {alarm['lot_id']}

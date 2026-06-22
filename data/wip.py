@@ -22,6 +22,15 @@ WIP_BY_ALARM: dict[str, list[ImpactLot]] = {
 }
 
 
+# 런타임 등록 WIP (트리아지 incident 등 동적 대상)
+_RUNTIME_WIP: dict[str, list[ImpactLot]] = {}
+
+
+def register_wip(alarm_id: str, lots: list[ImpactLot]) -> None:
+    """동적 대상(incident)의 영향 WIP를 런타임 등록, get_affected_wip에서 조회됨"""
+    _RUNTIME_WIP[alarm_id] = lots
+
+
 def get_affected_wip(alarm_id: str) -> list[ImpactLot]:
-    """알람 ID로 영향 WIP 정보를 반환, 매핑이 없으면 빈 리스트"""
-    return WIP_BY_ALARM.get(alarm_id, [])
+    """알람/incident ID로 영향 WIP 정보를 반환, 매핑이 없으면 빈 리스트"""
+    return WIP_BY_ALARM.get(alarm_id) or _RUNTIME_WIP.get(alarm_id, [])

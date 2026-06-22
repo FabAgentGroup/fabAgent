@@ -165,7 +165,7 @@ Tier 4 (대응 권고):
 
 def _build_user_prompt(alarm: dict, tier1: Tier1) -> str:
     sensors = ", ".join(f["name"] for f in tier1["features"])
-    equipment_id = ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
+    equipment_id = alarm.get("equipment_id") or ALARM_EQUIPMENT.get(alarm["id"], "(미매핑)")
     process = alarm["title"].split()[0]
     return f"""## 이상 알람
 - 공정: {alarm['title']} (current_stage: {process})

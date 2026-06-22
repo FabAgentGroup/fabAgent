@@ -102,6 +102,23 @@ def _usd(v) -> str:
     return f"${v:,.0f}"
 
 
+def incident_display_alarm(incident_id: str) -> dict | None:
+    """incident ID로 심층 분석 진입용 표시 alarm dict 구성 (사이드바·헤더용)"""
+    res = _run_triage()
+    inc = next((i for i in res["incidents"] if i["incident_id"] == incident_id), None)
+    if not inc:
+        return None
+    return {
+        "id": inc["incident_id"],
+        "status": "critical" if inc["risk_score"] >= 80 else "warn",
+        "title": f"{inc['process']} {inc['param']} 이상",
+        "lot_id": inc["dominant_tool"],
+        "feature": inc["param"],
+        "feature_arrow": "",
+        "time": "방금 전",
+    }
+
+
 @st.cache_data(show_spinner=False)
 def _run_triage() -> dict:
     return triage(load_alarm_stream())
@@ -257,3 +274,10 @@ def render_triage_board():
             comm = _commonality(selected_id, tuple(incidents))
             _render_suspects(sel_inc, comm)
             _render_disposition(sel_inc, _disposition(selected_id, tuple(incidents), comm))
+            st.html(
+                '<style>.t0-cta{display:inline-block;margin-top:14px;padding:10px 18px;'
+                'border-radius:9px;background:var(--t1-text);color:#fff;font-weight:800;'
+                'font-size:14px;text-decoration:none;}</style>'
+                f'<a href="?alarm={selected_id}" target="_self" class="t0-cta">'
+                f'이 incident 4-Tier 심층 분석 실행 →</a>'
+            )
