@@ -7,23 +7,20 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	detect(detect)
 	noise(noise)
+	planner(planner)
 	cause(cause)
-	cause_retry(cause_retry)
-	supervisor(supervisor)
 	impact(impact)
 	fast_impact(fast_impact)
 	response(response)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> detect;
-	cause -.-> cause_retry;
-	cause -.-> supervisor;
-	cause_retry --> supervisor;
-	detect -.-> cause;
+	cause -. &nbsp;fast_track&nbsp; .-> fast_impact;
+	cause -. &nbsp;proceed&nbsp; .-> impact;
 	detect -.-> noise;
+	detect -. &nbsp;go&nbsp; .-> planner;
 	fast_impact --> response;
 	impact --> response;
-	supervisor -.-> fast_impact;
-	supervisor -.-> impact;
+	planner --> cause;
 	noise --> __end__;
 	response --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
