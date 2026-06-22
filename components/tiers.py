@@ -183,6 +183,16 @@ def _render_action_bar():
         unsafe_allow_html=True,
     )
 
+    # 결정 사유 (보류·거절 시 감사 로그에 기록)
+    ss.setdefault("decision_reason", "")
+    ss.decision_reason = st.text_input(
+        "결정 사유 (선택, 감사 로그 기록)",
+        value=ss.decision_reason,
+        key="decision-reason-input",
+        disabled=ss.approved,
+        placeholder="보류·거절 사유나 승인 코멘트를 남기면 감사 추적에 기록됩니다",
+    )
+
     # 양쪽 spacer로 가운데 정렬
     _, c1, c2, c3, _ = st.columns([2.5, 1, 1, 2.2, 2.5])
     with c1:
@@ -219,21 +229,55 @@ def _render_action_result():
     )
 
 
+OPERATOR = "박○○"
+
+
+def _decision_confidence(tier_data: dict | None) -> float | None:
+    """기록용 신뢰도 - Tier4 디스포지션 신뢰도 우선, 없으면 Tier2 최상위 원인 기여도"""
+    if not tier_data:
+        return None
+    disp = tier_data.get("tier4", {}).get("disposition")
+    if disp and disp.get("confidence") is not None:
+        return float(disp["confidence"])
+    causes = tier_data.get("tier2", {}).get("causes", [])
+    return max((c.get("pct", 0) for c in causes), default=0) / 100.0
+
+
+def _audit_decision(decision: str):
+    """운영자 결정을 감사 로그에 영속 기록"""
+    from core.audit import record_decision
+
+    ss = st.session_state
+    alarm = next((a for a in ss.alarms if a["id"] == ss.selected_alarm_id), None)
+    tier_data = get_tier_data(ss.selected_alarm_id)
+    record_decision(
+        decision=decision,
+        target_id=ss.selected_alarm_id,
+        target_title=alarm["title"] if alarm else "",
+        surface="analysis",
+        operator=OPERATOR,
+        confidence=_decision_confidence(tier_data),
+        reason=ss.get("decision_reason", ""),
+    )
+
+
 def _on_reject():
+    _audit_decision("rejected")
     st.session_state.last_action = {
         "type": "rejected",
         "title": "권고 거절",
-        "meta": "사유 수집 모달은 MVP 범위 외, 후속 분석에 반영하려면 사유 입력 후 인시던트 DB에 기록 필요",
+        "meta": "거절 사유가 감사 로그에 기록되었습니다, 후속 분석·자가학습에 반영됩니다",
     }
     st.toast("권고 거절됨", icon="❌")
     st.rerun()
 
 
 def _on_hold():
+    _audit_decision("held")
     st.session_state.last_action = {
         "type": "held",
         "title": "권고 보류",
-        "meta": "5분 후 동일 알람이 재발생 예정, 추가 데이터 확보 후 재검토 권장",
+        "meta": "보류 사유가 감사 로그에 기록되었습니다, 추가 데이터 확보 후 재검토 권장",
     }
     st.toast("권고 보류됨", icon="⏸️")
     st.rerun()
@@ -253,6 +297,9 @@ def _on_approve():
         if tier_data:
             path = record_incident(alarm, tier_data, work_order)
             incident_doc = path.name
+
+    # 감사 로그 영속 기록 (승인)
+    _audit_decision("approved")
 
     # 알람 상태 업데이트
     for a in ss.alarms:

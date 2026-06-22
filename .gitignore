@@ -14,3 +14,6 @@ CLAUDE.md
 # data/secom/raw/*.data
 data/phm2016/raw/
 agents/rag/knowledge/INC-AUTO-*.md
+# 감사 로그 DB는 런타임 생성물 (커밋 제외)
+data/audit.db
+data/audit.db-journal
