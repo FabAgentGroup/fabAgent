@@ -9,6 +9,7 @@ FDC 알람 폭주를 랭킹된 incident로 압축해 보여주는 새 진입 sur
 import streamlit as st
 
 from agents.commonality import commonality_for_incident
+from agents.disposition import disposition_for_incident
 from agents.triage import triage
 from data.fdc.stream import load_alarm_stream
 
@@ -75,8 +76,30 @@ _STYLE = """
 .t0-bar-fill { height: 100%; background: var(--t2-text); border-radius: 4px; }
 .t0-suspect-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-family: var(--mono); }
 .t0-top-flag { color: var(--crit-text); font-weight: 800; }
+
+.t0-disp {
+  background: var(--t4-bg-soft); border: 1px solid var(--t4-border); border-radius: 12px;
+  padding: 16px 20px; margin-top: 14px;
+}
+.t0-disp-head { font-weight: 800; color: var(--t4-text); font-size: 15px; margin-bottom: 4px; }
+.t0-disp-rec {
+  display: flex; align-items: baseline; gap: 10px; margin: 10px 0 4px;
+}
+.t0-disp-rec-label { font-size: 18px; font-weight: 800; color: var(--text-primary); }
+.t0-disp-rec-tag { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: var(--t4-bg); color: var(--t4-text); font-weight: 700; }
+.t0-disp-rationale { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+.t0-disp-opt { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px dashed var(--border); }
+.t0-disp-opt.rec .t0-disp-opt-name { color: var(--t4-text); font-weight: 800; }
+.t0-disp-opt-name { min-width: 150px; font-size: 13px; color: var(--text-primary); }
+.t0-disp-opt-cost { font-family: var(--mono); font-weight: 800; font-size: 14px; min-width: 110px; text-align: right; }
+.t0-disp-opt-range { font-family: var(--mono); font-size: 11px; color: var(--text-tertiary); }
+.t0-disp-foot { font-size: 11px; color: var(--text-secondary); margin-top: 10px; font-family: var(--mono); }
 </style>
 """
+
+
+def _usd(v) -> str:
+    return f"${v:,.0f}"
 
 
 @st.cache_data(show_spinner=False)
@@ -88,6 +111,12 @@ def _run_triage() -> dict:
 def _commonality(incident_id: str, incidents: tuple) -> dict:
     inc = next((i for i in incidents if i["incident_id"] == incident_id), None)
     return commonality_for_incident(dict(inc)) if inc else {"suspects": []}
+
+
+@st.cache_data(show_spinner=False)
+def _disposition(incident_id: str, incidents: tuple, comm: dict) -> dict:
+    inc = next((i for i in incidents if i["incident_id"] == incident_id), None)
+    return disposition_for_incident(dict(inc), comm) if inc else {}
 
 
 def _risk_class(score: float) -> str:
@@ -156,6 +185,39 @@ def _render_suspects(inc: dict, comm: dict):
     )
 
 
+def _render_disposition(inc: dict, disp: dict):
+    if not disp or not disp.get("options"):
+        return
+    inp = disp["inputs"]
+    robust = "신뢰구간 내 유지" if disp["robust"] else "불확실성 큼"
+    opt_rows = []
+    for o in disp["options"]:
+        rec = " rec" if o["action"] == disp["recommended"] else ""
+        lo, hi = o["cost_range_usd"]
+        opt_rows.append(
+            f'<div class="t0-disp-opt{rec}">'
+            f'<span class="t0-disp-opt-name">{o["label"]}</span>'
+            f'<span class="t0-disp-opt-cost">{_usd(o["expected_cost_usd"])}</span>'
+            f'<span class="t0-disp-opt-range">범위 {_usd(lo)}~{_usd(hi)}</span>'
+            f'</div>'
+        )
+    st.html(
+        '<div class="t0-disp">'
+        '<div class="t0-disp-head">리스크 정량 디스포지션 (영향 WIP 처리)</div>'
+        f'<div class="t0-disp-rec">'
+        f'<span class="t0-disp-rec-label">{disp["recommended_label"]}</span>'
+        f'<span class="t0-disp-rec-tag">신뢰도 {disp["confidence"]:.0%} · {robust}</span>'
+        f'</div>'
+        f'<div class="t0-disp-rationale">{disp["options"][0]["rationale"]}  '
+        f'(최악 대비 {_usd(disp["savings_vs_worst_usd"])} 절감)</div>'
+        + "".join(opt_rows) +
+        f'<div class="t0-disp-foot">입력  공정 {inp["process"]} · 영향 {inp["n_wafers"]}장 · '
+        f'불량확률 {inp["p_defect"]:.0%}(±{inp["p_band"]:.0%}) · 현 가치 {_usd(inp["wafer_value_usd"])}/장 · '
+        f'완성 가치 {_usd(inp["final_wafer_value_usd"])}/장</div>'
+        '</div>'
+    )
+
+
 def render_triage_board():
     ss = st.session_state
     res = _run_triage()
@@ -194,3 +256,4 @@ def render_triage_board():
         if sel_inc:
             comm = _commonality(selected_id, tuple(incidents))
             _render_suspects(sel_inc, comm)
+            _render_disposition(sel_inc, _disposition(selected_id, tuple(incidents), comm))

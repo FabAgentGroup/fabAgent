@@ -18,6 +18,7 @@
 | **D10** | D9 후속: 코퍼스 12→34 확장 후 reranker 재평가 | hybrid / BAAI / ko-reranker (34 docs) | **가설 검증 - 효과 완전 반전** | [reranker_compare/results.md](reranker_compare/results.md) |
 | **D11** | Conductor (Plan-and-Execute) vs Autonomous | 4 LLM call vs 10 LLM call | **Conductor 채택** (속도·비용 우위, 품질 동등) | [conductor_vs_autonomous/results.md](conductor_vs_autonomous/results.md) |
 | **D12** | Tier 0 트리아지 + 커몬낼리티 엔진 | 알람 폭주 압축 · 커몬낼리티 vs sigma baseline | **압축 132x · nuisance 98% 억제 · commonality hit@1 3/3** | [triage_eval/results.md](triage_eval/results.md) |
+| **D13** | 리스크 정량 디스포지션 | 비용엔진 vs naive(항상 보류/진행/폐기) | **oracle 84% 일치 · 이론상한 +2.0% · naive 대비 최대 $49M 절감** | [disposition_eval/results.md](disposition_eval/results.md) |
 
 ## 핵심 결정 요약
 
