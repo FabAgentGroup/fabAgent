@@ -8,6 +8,7 @@ FDC 알람 폭주를 랭킹된 incident로 압축해 보여주는 새 진입 sur
 """
 import streamlit as st
 
+from agents.calibration import calibrated_is_real, runtime_calibrator
 from agents.commonality import commonality_for_incident
 from agents.disposition import disposition_for_incident
 from agents.triage import triage
@@ -57,6 +58,7 @@ _STYLE = """
   font-size: 11px; padding: 1px 7px; border-radius: 6px; background: var(--bg-subtle);
   color: var(--text-secondary); border: 1px solid var(--border);
 }
+.t0-calib { font-size: 10px; padding: 0 5px; border-radius: 5px; background: var(--t2-bg); color: var(--t2-text); font-weight: 700; }
 
 .t0-suspects {
   background: var(--t2-bg-soft); border: 1px solid var(--t2-border); border-radius: 12px;
@@ -150,6 +152,7 @@ def _render_card(inc: dict, selected_id: str | None):
     tools_str = inc["dominant_tool"] + (f" 외 {len(inc['tools'])-1}대" if len(inc["tools"]) > 1 else "")
     t_start = inc["window_start"][11:16]
     t_end = inc["window_end"][11:16]
+    is_real = calibrated_is_real(inc["max_sigma"])
     st.html(
         f'<a href="?view=triage&incident={inc["incident_id"]}" class="t0-card-link" target="_self">'
         f'<div class="t0-card {rc}{sel}">'
@@ -164,6 +167,7 @@ def _render_card(inc: dict, selected_id: str | None):
         f'<span>recipe <span class="mono">{inc["dominant_recipe"]}</span></span>'
         f'<span>알람 <span class="mono">{inc["n_alarms"]}</span>건</span>'
         f'<span>max σ <span class="mono">{inc["max_sigma"]}</span></span>'
+        f'<span>진짜 이상 P <span class="mono">{is_real:.0%}</span> <span class="t0-calib">보정</span></span>'
         f'<span class="mono">{t_start}~{t_end}</span>'
         f'</div>'
         f'</div></a>'
@@ -262,6 +266,12 @@ def render_triage_board():
         f'<div class="t0-stat"><div class="t0-stat-val accent">{res["compression_ratio"]}x</div>'
         f'<div class="t0-stat-label">압축비</div></div>'
         '</div></div>'
+    )
+    rc = runtime_calibrator()
+    st.html(
+        '<div style="font-size:11px;color:var(--text-secondary);margin:-8px 0 12px;">'
+        f"'진짜 이상 P'는 isotonic 보정된 신뢰도입니다 (ECE {rc['ece_before']:.2f} → {rc['ece_after']:.2f}, "
+        f"라벨 {rc['n']}건 학습)</div>"
     )
 
     selected_id = ss.get("selected_incident_id")
