@@ -244,8 +244,8 @@ def _decision_confidence(tier_data: dict | None) -> float | None:
 
 
 def _audit_decision(decision: str):
-    """운영자 결정을 감사 로그에 영속 기록"""
-    from core.audit import record_decision
+    """운영자 결정을 감사 로그에 영속 기록 (알람·incident 공통)"""
+    from core.audit import record_decision, surface_for
 
     ss = st.session_state
     alarm = next((a for a in ss.alarms if a["id"] == ss.selected_alarm_id), None)
@@ -254,7 +254,7 @@ def _audit_decision(decision: str):
         decision=decision,
         target_id=ss.selected_alarm_id,
         target_title=alarm["title"] if alarm else "",
-        surface="analysis",
+        surface=surface_for(ss.selected_alarm_id),
         operator=OPERATOR,
         confidence=_decision_confidence(tier_data),
         reason=ss.get("decision_reason", ""),
@@ -288,8 +288,10 @@ def _on_approve():
     ss.approved = True
 
     # 자가 학습 - 현재 알람의 분석 결과를 knowledge로 자동 기록
+    from core.audit import make_work_order
+
     alarm = next((a for a in ss.alarms if a["id"] == ss.selected_alarm_id), None)
-    work_order = f"W-{datetime.now():%Y%m%d}-{ss.selected_alarm_id[1:].zfill(3)}"
+    work_order = make_work_order(ss.selected_alarm_id)
     incident_doc = ""
     if alarm:
         from agents.rag.learn import record_incident
