@@ -29,6 +29,7 @@ from langsmith import traceable
 
 from agents.cause import run_cause
 from agents.detection import run_detection
+from agents.disposition import disposition_for_tier
 from agents.impact import run_impact
 from agents.planner import plan_workflow
 from agents.response import run_response
@@ -115,6 +116,7 @@ def _node_fast_impact(state: _GraphState) -> dict:
 
 def _node_response_conductor(state: _GraphState) -> dict:
     tier4 = run_response(state["alarm"], state["tier1"], state["tier2"], state["tier3"], plan=state["plan"])
+    tier4["disposition"] = disposition_for_tier(state["alarm"], state["tier1"], state["tier2"], state["tier3"])
     if state["plan"].get("action") == "escalate" and tier4.get("immediate"):
         tier4["immediate"][0]["text"] = "🚨 [HUMAN REVIEW 요구] " + tier4["immediate"][0]["text"]
     return {"tier4": tier4}
@@ -155,6 +157,7 @@ def _node_impact_autonomous(state: _GraphState) -> dict:
 
 def _node_response_autonomous(state: _GraphState) -> dict:
     tier4 = run_response(state["alarm"], state["tier1"], state["tier2"], state["tier3"])
+    tier4["disposition"] = disposition_for_tier(state["alarm"], state["tier1"], state["tier2"], state["tier3"])
     decision = state.get("supervisor_decision", {})
     if decision.get("action") == "escalate" and tier4.get("immediate"):
         tier4["immediate"][0]["text"] = "🚨 [HUMAN REVIEW 요구] " + tier4["immediate"][0]["text"]

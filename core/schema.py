@@ -69,10 +69,31 @@ class Reference(TypedDict):
     desc: str
 
 
+# Tier 4 디스포지션 (영향 WIP 처리 의사결정)
+class DispositionOption(TypedDict):
+    action: str                 # "continue" | "hold" | "rework" | "scrap"
+    label: str
+    expected_cost_usd: int
+    cost_range_usd: list[int]   # [lo, hi] (p_defect 신뢰구간 반영)
+    rationale: str
+    feasible: bool
+
+
+class Disposition(TypedDict):
+    recommended: str
+    recommended_label: str
+    options: list[DispositionOption]  # expected_cost 오름차순
+    savings_vs_worst_usd: int
+    confidence: float
+    robust: bool                # 추천이 p_defect 불확실성 내에서 유지되는가
+    inputs: dict                # 감사용 입력 (process/n_wafers/p_defect/가치 등)
+
+
 class Tier4(TypedDict):
     immediate: list[Action]
     longterm: list[Action]
     refs: list[Reference]
+    disposition: Disposition
 
 
 # 전체
