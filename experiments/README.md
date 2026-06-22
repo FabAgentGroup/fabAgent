@@ -19,6 +19,7 @@
 | **D11** | Conductor (Plan-and-Execute) vs Autonomous | 4 LLM call vs 10 LLM call | **Conductor 채택** (속도·비용 우위, 품질 동등) | [conductor_vs_autonomous/results.md](conductor_vs_autonomous/results.md) |
 | **D12** | Tier 0 트리아지 + 커몬낼리티 엔진 | 알람 폭주 압축 · 커몬낼리티 vs sigma baseline | **압축 132x · nuisance 98% 억제 · commonality hit@1 3/3** | [triage_eval/results.md](triage_eval/results.md) |
 | **D13** | 리스크 정량 디스포지션 | 비용엔진 vs naive(항상 보류/진행/폐기) | **oracle 84% 일치 · 이론상한 +2.0% · naive 대비 최대 $49M 절감** | [disposition_eval/results.md](disposition_eval/results.md) |
+| **D14** | 예측형 RUL (PHM 2016) | 예지보전 vs 캘린더 PM | **RUL MAE 1.43 lot · α-λ 92% · breach 0%로 낭비수명 최소** | [rul_eval/results.md](rul_eval/results.md) |
 
 ## 핵심 결정 요약
 
