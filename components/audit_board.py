@@ -7,6 +7,7 @@
 """
 import streamlit as st
 
+from agents.calibration import runtime_calibrator
 from core.audit import recent, record_decision, stats
 
 _STYLE = """
@@ -75,6 +76,16 @@ def render_audit_board():
         f'<div class="au-stat-label">보류</div></div>'
         f'<div class="au-stat"><div class="au-stat-val">{s["rejected"]}</div>'
         f'<div class="au-stat-label">거절</div></div>'
+        '</div>'
+    )
+
+    rc = runtime_calibrator()
+    st.html(
+        '<div class="au-row" style="border-left-color:var(--t2-text);">'
+        '<span class="au-dec" style="background:var(--t2-bg);color:var(--t2-text);min-width:62px;">보정</span>'
+        '<span class="au-target">신뢰도 캘리브레이션 <small>isotonic</small></span>'
+        f'<span class="au-conf">ECE {rc["ece_before"]:.2f} → {rc["ece_after"]:.2f}</span>'
+        f'<span class="au-reason">라벨 {rc["n"]}건 학습, 표시 신뢰도에 런타임 적용됨</span>'
         '</div>'
     )
 

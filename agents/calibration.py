@@ -6,6 +6,9 @@ ECE(Expected Calibration Error)로 어긋남을 측정하고, isotonic regressio
 
 [설계 원칙] 보정은 라벨링된 (confidence, outcome) 이력에서 학습한 결정론 매핑
 """
+import math
+from functools import lru_cache
+
 from sklearn.isotonic import IsotonicRegression
 
 
@@ -77,3 +80,38 @@ class IsotonicCalibrator:
     def calibrate(self, confidence: float) -> float:
         """단일 confidence 보정 (런타임 표시용)"""
         return self.transform([confidence])[0]
+
+
+# ==================== 런타임 보정기 (UI 신뢰도 표시용) ====================
+# 이상 강도(sigma) -> '진짜 이상' 확률의 naive 추정을 라벨링된 이력으로 보정
+# D15와 동일한 모델, 런타임에 1회 fit 후 캐시
+
+_RAW_K = 1.5
+_RAW_S0 = 3.5
+
+
+def _raw_is_real(sigma: float) -> float:
+    return 1.0 / (1.0 + math.exp(-_RAW_K * (sigma - _RAW_S0)))
+
+
+@lru_cache(maxsize=1)
+def runtime_calibrator() -> dict:
+    """FDC 라벨 이력으로 isotonic 보정기를 1회 학습, 보정 전/후 ECE 포함 반환"""
+    from data.fdc.stream import load_alarm_stream
+
+    alarms = load_alarm_stream(with_truth=True)
+    conf = [_raw_is_real(a["sigma"]) for a in alarms]
+    out = [1 if a["_truth"]["klass"] == "excursion" else 0 for a in alarms]
+    cal = IsotonicCalibrator().fit(conf, out)
+    return {
+        "calibrator": cal,
+        "ece_before": expected_calibration_error(conf, out),
+        "ece_after": expected_calibration_error(cal.transform(conf), out),
+        "n": len(alarms),
+    }
+
+
+def calibrated_is_real(sigma: float) -> float:
+    """이상 강도(sigma)의 '진짜 이상' 확률을 보정해 반환 (0~1)"""
+    rc = runtime_calibrator()
+    return rc["calibrator"].calibrate(_raw_is_real(sigma))
