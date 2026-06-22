@@ -24,7 +24,7 @@ import json
 from langsmith import traceable
 
 from agents import commonality
-from agents.tools import equipment, incident, knowledge, process
+from agents.tools import equipment, incident, knowledge, process, rul
 
 _REGISTRY = {
     "search_knowledge": knowledge.search_knowledge,
@@ -35,6 +35,7 @@ _REGISTRY = {
     "query_wip_status": process.query_wip_status,
     "get_yield_baseline": process.get_yield_baseline,
     "commonality_analysis": commonality.commonality_analysis,
+    "predict_tool_rul": rul.predict_tool_rul,
 }
 
 # Tier별 노출 tool 묶음
@@ -55,6 +56,7 @@ TOOLS_RESPONSE = [
     incident.SCHEMA,
     equipment.SCHEMA_GET_PM,
     equipment.SCHEMA_CHECK_PM,
+    rul.SCHEMA,
 ]
 
 
