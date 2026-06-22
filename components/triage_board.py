@@ -291,3 +291,57 @@ def render_triage_board():
                 f'<a href="?alarm={selected_id}" target="_self" class="t0-cta">'
                 f'이 incident 4-Tier 심층 분석 실행 →</a>'
             )
+            _render_incident_decision(sel_inc, comm, _disposition(selected_id, tuple(incidents), comm))
+
+
+OPERATOR_NAME = "박○○"
+_DEC_LABEL = {"approved": "승인", "held": "보류", "rejected": "거절"}
+
+
+def _commit_incident_decision(inc: dict, comm: dict, disp: dict, decision: str, reason: str):
+    """트리아지 incident 결정을 감사 로그 + (승인 시) 자가학습 문서에 기록"""
+    from agents.rag.learn import record_incident_brief
+    from core.audit import make_work_order, record_decision, surface_for
+
+    tid = inc["incident_id"]
+    wo = make_work_order(tid)
+    doc = ""
+    if decision == "approved":
+        doc = record_incident_brief(inc, comm, disp, decision, wo).name
+    record_decision(
+        decision=decision, target_id=tid, target_title=inc["title"],
+        surface=surface_for(tid), operator=OPERATOR_NAME,
+        confidence=disp.get("confidence"), reason=reason,
+        payload={"work_order": wo, "recommended": disp.get("recommended")},
+    )
+    st.session_state[f"inc_dec_{tid}"] = {"label": _DEC_LABEL[decision], "doc": doc, "wo": wo}
+
+
+def _render_incident_decision(inc: dict, comm: dict, disp: dict):
+    ss = st.session_state
+    tid = inc["incident_id"]
+    done = ss.get(f"inc_dec_{tid}")
+    if done:
+        extra = f"자가학습 문서 {done['doc']} 기록" if done["doc"] else "사유 기록"
+        st.success(f"결정 기록 완료: {done['label']} · 작업지시서 {done['wo']} · 감사 로그 + {extra}")
+        return
+
+    st.markdown("**incident 운영자 결정** (4-Tier 없이 트리아지에서 즉시 결정)")
+    reason = st.text_input(
+        "결정 사유 (선택, 감사 로그 기록)", key=f"reason_{tid}",
+        placeholder="보류·거절 사유나 승인 코멘트",
+    )
+    c1, c2, c3 = st.columns([1, 1, 1])
+    decided = None
+    with c1:
+        if st.button("거절", key=f"rej_{tid}", use_container_width=True):
+            decided = "rejected"
+    with c2:
+        if st.button("보류", key=f"hold_{tid}", use_container_width=True):
+            decided = "held"
+    with c3:
+        if st.button("승인 및 기록", key=f"appr_{tid}", type="primary", use_container_width=True):
+            decided = "approved"
+    if decided:
+        _commit_incident_decision(inc, comm, disp, decided, reason)
+        st.rerun()
