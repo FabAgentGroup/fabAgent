@@ -14,13 +14,51 @@ short_description: 반도체 공정 이상의 탐지·원인·영향·대응을 
 # FabAgent
 
 반도체 공정 이상의 **탐지 → 원인 분석 → 영향 평가 → 대응 권고**를 하나의 멀티 에이전트
-파이프라인으로 통합하는 운영 플랫폼입니다.
+파이프라인으로 통합하고, 그 앞뒤를 **Tier 0 알람 트리아지**부터 **리스크 정량 디스포지션 ·
+예지보전 · 감사 추적**까지 잇는 운영 플랫폼입니다.
 
 각 Tier가 **자율 도구 호출(tool calling)** 과 **조건부 라우팅** 을 통해 의사결정을 진행하는
 진짜 LLM agent로 구성되어, 단일 LLM 챗봇과 달리 추적 가능하고 모듈화된 의사결정 흐름과
 auditable한 reasoning trace를 제공합니다.
 
+### 전체 운영 플로우
+
+```
+FDC 알람 폭주(수백 건)
+   │  Tier 0 트리아지: nuisance 억제 + 시공간 클러스터링 + 리스크 랭킹
+   ▼
+incident(소수, 랭킹)
+   │  커몬낼리티 엔진: 불량 웨이퍼 공통 엔티티 통계 추출(lift · p-value)
+   ▼
+정량 용의자(장비 · 챔버 · 슬러리 lot · 작업자)
+   │  [심층 분석] 4-Tier 멀티 에이전트(탐지 → 원인 → 영향 → 대응)
+   ▼
+리스크 정량 디스포지션(진행 / 보류 / 재작업 / 폐기, 기대비용 $ + 신뢰구간)
+   │  운영자 결정
+   ▼
+감사 로그(SQLite) + 자가학습 루프(인시던트 DB → RAG)
+
+[병렬] 예지보전: 소모품 잔여수명(RUL) 예측 → 한계 도달 전 PM
+[교차] 신뢰 레이어: confidence 캘리브레이션(ECE) · 보정된 신뢰도 표시
+```
+
+운영자 UI는 **4개 뷰**로 구성됩니다: Tier 0 트리아지 보드 · 심층 분석(4-Tier) ·
+예지보전 보드 · 감사 로그. 모든 핵심 결정은 정량 실험(D12~D16)으로 검증되며,
+트리아지 · 커몬낼리티 · 디스포지션 · RUL · 캘리브레이션은 전부 결정론이라 LLM 키 없이
+즉시 동작합니다.
+
 ## 핵심 특징
+
+### Tier 0 운영 레이어 (현장 애로사항 해소)
+
+- **Tier 0 트리아지** - FDC 알람 폭주를 nuisance 억제 + 시공간 클러스터링 + 리스크 랭킹으로 incident에 압축 (D12: 397→3, 132x, nuisance 98% 억제). 랭킹은 전적으로 결정론이라 감사 가능
+- **커몬낼리티 엔진** - 불량 웨이퍼의 공통 엔티티(장비·챔버·슬러리 lot·작업자)를 χ²/lift로 통계 추출 (D12: root-cause hit@1 3/3). 수작업 RCA를 자동화
+- **리스크 정량 디스포지션** - 진행/보류/재작업/폐기를 기대비용($)과 신뢰구간으로 비교·추천 (D13: oracle 84% 일치, naive 정책 대비 최대 $49M 절감)
+- **예측형 RUL** - PHM 2016 CMP 소모품 마모 추세를 외삽해 잔여수명 예측 → 예지보전 (D14: MAE 1.43 lot, α-λ 92%, breach 0%)
+- **신뢰·도입 레이어** - confidence 캘리브레이션(D15: ECE 0.43→0.00, 런타임 적용) + SQLite 감사 로그 + 운영자 결정 자가학습(D16: retrieval hit@3 0→80%)
+- **incident → 4-Tier 자동 핸드오프** - 트리아지 incident를 오케스트레이터에 연결, 정량 용의자를 LLM 원인 분석에 주입
+
+### 4-Tier 멀티 에이전트
 
 - **4-Tier multi-agent system** - 탐지(ML) · 원인(agentic RAG) · 영향(tool-using) · 대응(tool-using)
 - **Plan-and-Execute 패턴** (기본) - Central Planner Agent가 전체 워크플로우 plan을 1회 산출, Tier executor가 plan대로 실행 → 통신 오버헤드 최소화 (LLM 호출 -60%, latency -54%)
@@ -83,14 +121,16 @@ auditable한 reasoning trace를 제공합니다.
               └────────────────────────┘
 ```
 
-### 7개 Agent Tools
+### 9개 Agent Tools
 
 | 도구 | 반환 | 사용 Tier |
 |---|---|---|
 | `search_knowledge` | INC/FMEA/SOP/FLOW 문서 hybrid 검색 결과 | 2, 4 |
 | `lookup_incident_history` | 과거 incident 구조화 레코드 (원인·해결책·yield 회복률) | 2, 4 |
+| `commonality_analysis` | 불량 웨이퍼 공통 엔티티 통계(lift·p-value) | 2 |
 | `get_pm_history` | 장비 마지막 PM 일자·경과일·overdue 여부 | 2, 3, 4 |
 | `check_pm_schedule` | 다음 7일 가용 PM 윈도우 | 4 |
+| `predict_tool_rul` | 소모품 잔여수명(RUL) + 예지보전 권고 | 4 |
 | `query_wip_status` | 영향 받는 WIP lot/wafer 수 | 3 |
 | `get_downstream_steps` | 후공정 의존성 (typical delta·severity) | 3 |
 | `get_yield_baseline` | 공정 최근 30일 yield 기준선 (%) | 3 |
@@ -108,6 +148,12 @@ LLM이 어떤 도구를 언제 호출할지 자율 결정합니다. 호출 로�
 SECOM은 익명 처리된 표준 벤치마크라 공정 step 라벨이 narrative입니다 (한계 명시).
 PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 가능합니다.
 
+**Tier 0 운영 데이터** (`data/fdc`, `data/mes`, `data/synth_scenario.py`): 한 교대치 FDC 알람
+스트림(라벨링 397건)과 웨이퍼 genealogy(600장)를 seed 고정으로 합성합니다. 진짜 excursion 3건이
+공통 root-cause 엔티티(챔버·슬러리 lot 등)로 묶이도록 구성되어, 트리아지·커몬낼리티·디스포지션·RUL을
+정답 대비 정량 평가할 수 있습니다. RUL의 소모품 수명한계·열화율은 PHM 2016 CMP 실데이터(`USAGE_OF_*`)에서
+도출했습니다.
+
 ## 정량 평가 요약
 
 핵심 의사결정마다 ablation 실험을 수행하고 결과·차트·시행착오를 기록했습니다.
@@ -124,6 +170,21 @@ PHM 2016 CMP는 실제 CMP 공정 센서 데이터로 step-specific 추론이 �
 | **D9** | 한국어 reranker (Dongjin-kr/ko-reranker) vs 영어(BAAI) vs hybrid (12 docs) | 둘 다 hybrid에 미달 | hybrid 0.734 / BAAI 0.714 / ko 0.703 |
 | **D10** | **D9 후속**: 코퍼스 12→34 확장 후 reranker 재평가 | **가설 검증 - 효과 완전 반전** | hybrid **0.592** / BAAI **0.709 (+0.117)** / ko **0.675 (+0.083)** |
 | **D11** | Conductor (Plan-and-Execute) vs Autonomous (tool-using loop) | **Conductor 채택** | LLM -60%, Latency **131→60초 (-54%)**, 비용 -58%, **인용 동등(6.0)** |
+| **D12** | Tier 0 트리아지 + 커몬낼리티 | 클러스터링 + χ²/lift | 압축 **132x**, nuisance **98%** 억제, precision@3 100%, commonality hit@1 **3/3** |
+| **D13** | 리스크 정량 디스포지션 | 비용엔진 vs naive 정책 | oracle **84%** 일치, 이론상한 +2.0%, naive 대비 최대 **$49M** 절감 |
+| **D14** | 예측형 RUL (PHM 2016) | 예지보전 vs 캘린더 PM | RUL MAE **1.43 lot**, α-λ **92%**, breach **0%**로 낭비수명 최소 |
+| **D15** | 신뢰도 캘리브레이션 | raw vs isotonic 보정 | ECE **0.427 → 0.001** (-100%), Brier 0.206 → 0.005 |
+| **D16** | 운영자 결정 자가학습 루프 | 인시던트 기록 전/후 retrieval | hit@3 **0% → 80%** (운영자 지식 즉시 반영) |
+
+### D12~D16 핵심 그래프
+
+![트리아지 압축](experiments/triage_eval/charts/funnel.png)
+
+![디스포지션 정책별 비용](experiments/disposition_eval/charts/cost_vs_p.png)
+
+![예지보전 vs 캘린더 PM](experiments/rul_eval/charts/pm_tradeoff.png)
+
+![캘리브레이션 reliability diagram](experiments/calibration_eval/charts/reliability.png)
 
 ### D6 핵심 그래프
 
@@ -341,48 +402,52 @@ LANGSMITH_PROJECT=fabagent
 
 ```
 fabagent/
-├── app.py                       # Streamlit 엔트리포인트
-├── components/                  # UI 컴포넌트 (사이드바·헤더·Tier 카드·cascade)
+├── app.py                       # Streamlit 엔트리포인트 (4뷰 라우팅)
+├── components/                  # UI 컴포넌트
+│   ├── triage_board.py          #   Tier 0 트리아지 보드 (incident·용의자·디스포지션·결정)
+│   ├── maintenance_board.py     #   예지보전 보드 (RUL·소모품 건전성)
+│   ├── audit_board.py           #   감사 로그 보드 (결정 이력·캘리브레이션 상태)
+│   └── tiers.py, ...            #   4-Tier cascade·사이드바·헤더
 ├── core/
-│   ├── schema.py                # Tier1~4 TypedDict 계약
-│   └── pipeline.py              # 알람 → Tier 데이터 라우터
+│   ├── schema.py                # Tier0~4 TypedDict 계약 (Disposition 포함)
+│   ├── pipeline.py              # 알람·incident → Tier 데이터 라우터
+│   └── audit.py                 # SQLite 감사 로그 (record/recent/stats, work_order)
 ├── agents/
-│   ├── orchestrator.py          # LangGraph StateGraph + 조건부 라우팅
+│   ├── orchestrator.py          # LangGraph StateGraph + incident 핸드오프 진입점
+│   ├── triage.py                # Tier 0 트리아지 (nuisance 억제·클러스터링·랭킹)
+│   ├── commonality.py           # 커몬낼리티 엔진 (χ²/lift 과대표현)
+│   ├── disposition.py           # 리스크 정량 디스포지션 (기대비용·신뢰구간)
+│   ├── rul.py                   # RUL 예측 엔진 (열화 외삽·예지보전 권고)
+│   ├── calibration.py           # ECE·isotonic 캘리브레이션 (런타임 보정기)
 │   ├── detection.py             # Tier 1 IsolationForest (SECOM/PHM 디스패치)
-│   ├── planner.py               # Central Planner Agent (Plan-and-Execute, conductor 모드)
-│   ├── cause.py                 # Tier 2 (conductor: plan 받음 / autonomous: tool loop)
-│   ├── impact.py                # Tier 3 (conductor / autonomous 양 모드)
-│   ├── response.py              # Tier 4 (conductor / autonomous 양 모드)
+│   ├── planner.py               # Central Planner Agent (Plan-and-Execute)
+│   ├── cause.py / impact.py / response.py  # Tier 2/3/4 (conductor / autonomous)
 │   ├── supervisor.py            # autonomous 모드 전용 LLM-driven router
-│   ├── llm.py                   # OpenAI 클라이언트 + LangSmith wrap_openai 통합
-│   ├── tools/                   # 7개 agent 도구
-│   │   ├── knowledge.py         #   search_knowledge (RAG 검색)
-│   │   ├── incident.py          #   lookup_incident_history
-│   │   ├── equipment.py         #   get_pm_history, check_pm_schedule
-│   │   └── process.py           #   query_wip_status, get_downstream_steps, get_yield_baseline
+│   ├── llm.py                   # OpenAI 클라이언트 + LangSmith wrap_openai
+│   ├── tools/                   # 9개 agent 도구
+│   │   ├── knowledge.py · incident.py · commonality.py
+│   │   ├── equipment.py · rul.py
+│   │   └── process.py
 │   └── rag/
-│       ├── store.py             # 백엔드 dispatch (keyword/faiss/hybrid/hybrid_rerank)
-│       ├── faiss_store.py       # FAISS 벡터 검색
-│       ├── hybrid_store.py      # BM25 + FAISS + Reciprocal Rank Fusion
-│       ├── rerank.py            # Cross-encoder 재정렬 (BAAI/bge-reranker-base)
-│       ├── crag.py              # CRAG self-correction (grader + query refiner)
-│       ├── learn.py             # 자가 학습 루프 (INC-AUTO-*.md 자동 기록)
+│       ├── store.py · faiss_store.py · hybrid_store.py · rerank.py · crag.py
+│       ├── learn.py             # 자가 학습 루프 (record_incident / record_incident_brief)
 │       └── knowledge/           # 도메인 문서 (INC/FMEA/SOP/FLOW)
 ├── data/
-│   ├── demo.py                  # 알람 정의
-│   ├── wip.py                   # 영향 WIP 결정론 데이터
+│   ├── demo.py · wip.py         # 알람 정의 · 영향 WIP (런타임 등록 지원)
+│   ├── synth_scenario.py        # Tier 0 공유 ground-truth (planted incident)
+│   ├── fdc/ · mes/              # 합성 FDC 알람 스트림 · 웨이퍼 genealogy
+│   ├── cost_model.py            # 디스포지션 비용 파라미터
 │   ├── secom/                   # SECOM 로더 + 전처리 + raw .data
-│   └── phm2016/                 # PHM 2016 CMP 로더 + 사전 집계 CSV
-├── experiments/                 # 정량 비교 실험 + 차트
-│   ├── tier1_detection/         # D1: IsoForest / LOF / OC-SVM
-│   ├── retrieval_compare/       # D2: keyword / FAISS / hybrid / +rerank
-│   ├── multi_vs_single/         # D5: multi-agent vs single LLM
-│   ├── rag_eval/                # RAGAS 평가 (hybrid vs hybrid_rerank)
-│   ├── rag_paradigm/            # D6: 5단계 paradigm ablation
-│   ├── agentic_vs_workflow/     # D7: workflow vs agentic 비교
-│   ├── crag_eval/               # D8: CRAG self-correction 효과 평가
-│   ├── reranker_compare/        # D9·D10: 한국어 reranker + 확장 코퍼스 가설 검증
-│   └── conductor_vs_autonomous/ # D11: Conductor vs Autonomous (latency -54%, 인용 동등)
+│   └── phm2016/                 # PHM 2016 CMP 로더 + consumables(RUL 수명 모델)
+├── experiments/                 # 정량 비교 실험 + 차트 (D1~D16)
+│   ├── tier1_detection/ · retrieval_compare/ · multi_vs_single/ · rag_eval/
+│   ├── rag_paradigm/ · agentic_vs_workflow/ · crag_eval/ · reranker_compare/
+│   ├── conductor_vs_autonomous/ # D11
+│   ├── triage_eval/             # D12: 트리아지 + 커몬낼리티
+│   ├── disposition_eval/        # D13: 디스포지션 비용
+│   ├── rul_eval/                # D14: RUL + 예지보전
+│   ├── calibration_eval/        # D15: ECE 캘리브레이션
+│   └── learning_eval/           # D16: 자가학습 retrieval
 ├── docs/orchestrator_graph.mmd  # LangGraph 자동 추출 mermaid
 ├── styles/main.css              # 디자인 시스템
 └── tests/
@@ -404,7 +469,18 @@ fabagent/
 
 - **SECOM의 익명성**: 590개 센서가 어느 공정·물리량인지 비공개라 A1/A2의 step 라벨은 시연용 narrative
 - **knowledge 문서**: 합성 12개 + 공개 자료(위키/SK하이닉스/삼성/SKC/PHM) 22개 = **총 34개**. 실 fab 수천 문서 대비 여전히 작지만, D10에서 코퍼스 규모와 reranker 효용의 관계는 정량 검증됨
+- **합성 운영 데이터**: Tier 0 FDC 스트림·MES genealogy는 실데이터 통계(PHM `USAGE_OF_*` 등)에 보정한 합성. 실 fab은 FDC/MES/EAP/YMS 어댑터로 교체
 - **도구 mock data**: PM 이력·yield baseline·downstream 의존성은 in-memory mock (실 fab은 MES/EAP/YMS 어댑터로 교체)
-- **한국어 reranker 검증 완료(D9)**: hybrid 단독에 미달, 코퍼스 확장이 reranker 효용의 선결조건임을 확인
-- **Supervisor fast_track 시연 부재**: 현 3개 데모 알람은 모두 proceed_full 선택 - fast_track/escalate 시연을 위해선 더 다양한 알람 시나리오 필요
-- **고도화 방향**: GraphRAG(공정 의존성 노드 그래프) · 실 MES/EAP/YMS 어댑터 · 한국어 reranker 전용 fine-tuning · 멀티 에이전트 negotiation (현재는 supervisor가 일방향 라우팅)
+- **비용·수명 파라미터**: 디스포지션 비용($)과 소모품 수명한계는 대표값 기반. 절대값보다 결정 간 상대 트레이드오프가 핵심이며, 실 운영 시 원가회계·EAP 값으로 보정
+- **Supervisor fast_track 시연 부재**: 현 데모 알람은 모두 proceed_full 선택 - fast_track/escalate 시연을 위해선 더 다양한 알람 시나리오 필요
+
+### 실무 고도화로 완료된 항목 (D12~D16)
+
+- **Tier 0 트리아지 + 커몬낼리티** (D12): 알람 피로와 수작업 RCA를 자동화
+- **리스크 정량 디스포지션** (D13): hold/scrap/rework/continue를 $ 기대비용으로 의사결정
+- **예측형 RUL** (D14): 반응형에서 예측형 PM으로 전환
+- **신뢰·도입 레이어** (D15·D16): confidence 캘리브레이션 + 감사 로그(SQLite) + 자가학습 폐루프
+
+### 남은 고도화 방향
+
+- GraphRAG(공정 의존성 노드 그래프) · 실 MES/EAP/YMS·FDC 어댑터 · 한국어 reranker 전용 fine-tuning · 멀티 에이전트 negotiation (현재는 supervisor가 일방향 라우팅)
