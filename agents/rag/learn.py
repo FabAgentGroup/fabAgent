@@ -21,6 +21,64 @@ def record_incident(alarm: dict, tier_data: TierData, work_order_id: str) -> Pat
     return path
 
 
+_DECISION_LABEL = {"approved": "승인", "held": "보류", "rejected": "거절"}
+
+
+def record_incident_brief(
+    incident: dict, commonality: dict, disposition: dict, decision: str, work_order_id: str
+) -> Path:
+    """트리아지 incident 결정(LLM 4-Tier 없이)을 인시던트 .md로 저장
+
+    커몬낼리티 정량 용의자 + 디스포지션 결정을 결정론으로 기록해 RAG 학습 대상에 포함
+    """
+    date = datetime.now().strftime("%Y-%m-%d")
+    doc_id = f"INC-AUTO-{date}-{incident['incident_id']}"
+    path = KNOWLEDGE_DIR / f"{doc_id}.md"
+    path.write_text(
+        _render_brief(doc_id, incident, commonality, disposition, decision, work_order_id),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _render_brief(
+    doc_id: str, inc: dict, comm: dict, disp: dict, decision: str, work_order: str
+) -> str:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    suspects_md = "\n".join(
+        f"{i+1}. {s['dim_label']} {s['value']} - 불량률 {s['entity_fail_rate']:.0%} "
+        f"vs 전체 {s['baseline_fail_rate']:.0%} (lift {s['lift']}x, p={s['p_value']:.1e})"
+        for i, s in enumerate(comm.get("suspects", []))
+    ) or "(정량 용의자 없음)"
+    opts_md = "\n".join(
+        f"- {o['label']}: 기대비용 ${o['expected_cost_usd']:,}"
+        for o in disp.get("options", [])
+    )
+    return f"""# {doc_id} - {inc['title']} 트리아지 결정 기록
+
+## 분류
+- 유형: 트리아지 incident 결정 (운영자 {_DECISION_LABEL.get(decision, decision)})
+- 공정: {inc['process']}
+- 장비: {inc['dominant_tool']}
+- recipe: {inc['dominant_recipe']}
+- 기록 시각: {now}
+- 작업지시서: {work_order}
+
+## 증상
+{inc['process']} {inc['param']} 이상 - 알람 {inc['n_alarms']}건, max σ {inc['max_sigma']}
+
+## 정량 용의자 (커몬낼리티)
+{suspects_md}
+
+## 디스포지션
+- 추천: {disp.get('recommended_label', '-')} (신뢰도 {disp.get('confidence', 0):.0%})
+{opts_md}
+
+## 운영자 결정
+- 결정: {_DECISION_LABEL.get(decision, decision)}
+"""
+
+
 def _render_doc(doc_id: str, alarm: dict, td: TierData, work_order: str) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     t1, t2, t3, t4 = td["tier1"], td["tier2"], td["tier3"], td["tier4"]
