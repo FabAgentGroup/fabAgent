@@ -48,8 +48,11 @@ SYSTEM_PROMPT = """당신은 반도체 공정 원인 분석 전문가입니다.
 - search_knowledge(query): 사내 지식 문서(INC/FMEA/SOP/FLOW) hybrid 검색
 - lookup_incident_history(symptom): 과거 incident 구조화 조회 (원인·해결책·yield 회복률)
 - get_pm_history(equipment_id): 장비 PM 이력 (마지막 PM 경과일, overdue 여부)
+- commonality_analysis(process, scope_tool, scope_recipe): 불량 웨이퍼의 공통 엔티티(장비·챔버·슬러리 lot·작업자)를 통계(lift·p-value)로 추출
 
 [전략]
+- 정성 근거(search/incident)와 정량 근거(commonality)를 함께 쓰세요
+  commonality의 과대표현 엔티티(lift 높고 p 낮음)는 강력한 물리적 원인 후보이며 evidence·citations에 반영하세요
 - 도구를 자율적으로 선택·호출해 충분한 근거를 모으세요 (반복 호출 허용)
 - 동일한 도구를 반복 호출하지 말고, 필요한 정보가 다 모이면 호출을 멈추세요
 - 모인 정보가 충분하면 자연어로 답하지 말고 곧바로 종료해 최종 구조화 출력으로 넘어가세요
@@ -118,6 +121,16 @@ def _execute_tier2_plan(plan_tier2: dict, trace_calls: list) -> str:
         result = dispatch_tool("get_pm_history", {"equipment_id": eq_id})
         trace_calls.append({"name": "get_pm_history", "args": {"equipment_id": eq_id}})
         blocks.append(f"[get_pm_history: {eq_id!r}]\n{result}")
+    comm = plan_tier2.get("commonality") or {}
+    if comm.get("process"):
+        args = {"process": comm["process"]}
+        if comm.get("scope_tool"):
+            args["scope_tool"] = comm["scope_tool"]
+        if comm.get("scope_recipe"):
+            args["scope_recipe"] = comm["scope_recipe"]
+        result = dispatch_tool("commonality_analysis", args)
+        trace_calls.append({"name": "commonality_analysis", "args": args})
+        blocks.append(f"[commonality_analysis: {args}]\n{result}")
     return "\n\n".join(blocks) if blocks else "(planner가 정보 수집 지시 없음)"
 
 

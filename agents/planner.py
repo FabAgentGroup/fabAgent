@@ -45,8 +45,22 @@ PLAN_SCHEMA = {
                     "items": {"type": "string"},
                     "description": "PM 이력 조회 장비 ID (0~1개)",
                 },
+                "commonality": {
+                    "type": "object",
+                    "description": "MES genealogy 커몬낼리티 분석 (불량 웨이퍼 공통 엔티티 통계 추출)",
+                    "properties": {
+                        "process": {
+                            "type": "string",
+                            "description": "분석 공정 (Photo/Etch/CMP/Diffusion/Implant). 불필요하면 빈 문자열",
+                        },
+                        "scope_tool": {"type": "string", "description": "용의 장비로 한정 (없으면 빈 문자열)"},
+                        "scope_recipe": {"type": "string", "description": "용의 recipe로 한정 (없으면 빈 문자열)"},
+                    },
+                    "required": ["process", "scope_tool", "scope_recipe"],
+                    "additionalProperties": False,
+                },
             },
-            "required": ["search_queries", "incident_symptoms", "equipment_ids"],
+            "required": ["search_queries", "incident_symptoms", "equipment_ids", "commonality"],
             "additionalProperties": False,
         },
         "tier3": {
@@ -118,6 +132,9 @@ Tier 2 (원인 분석):
 - search_queries: 사내 지식(INC/FMEA/SOP/FLOW) hybrid 검색 (1~3개)
 - incident_symptoms: 과거 incident DB 구조화 조회 (0~2개)
 - equipment_ids: 장비 PM 이력 조회 (0~1개)
+- commonality: MES genealogy로 불량 웨이퍼의 공통 엔티티(장비·챔버·슬러리·작업자)를 통계 추출
+  - process: 알람 공정명을 넣으면 분석 수행. 단발성 이상이라 불필요하면 빈 문자열
+  - scope_tool/scope_recipe: 용의 범위를 좁힐 장비/recipe (모르면 빈 문자열)
 
 Tier 3 (영향 평가):
 - alarm_id: WIP 조회 (반드시 1개, 알람 ID 그대로)

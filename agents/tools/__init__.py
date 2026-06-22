@@ -23,6 +23,7 @@ import json
 
 from langsmith import traceable
 
+from agents import commonality
 from agents.tools import equipment, incident, knowledge, process
 
 _REGISTRY = {
@@ -33,6 +34,7 @@ _REGISTRY = {
     "get_downstream_steps": process.get_downstream_steps,
     "query_wip_status": process.query_wip_status,
     "get_yield_baseline": process.get_yield_baseline,
+    "commonality_analysis": commonality.commonality_analysis,
 }
 
 # Tier별 노출 tool 묶음
@@ -40,6 +42,7 @@ TOOLS_CAUSE = [
     knowledge.SCHEMA,
     incident.SCHEMA,
     equipment.SCHEMA_GET_PM,
+    commonality.SCHEMA,
 ]
 TOOLS_IMPACT = [
     process.SCHEMA_WIP,
