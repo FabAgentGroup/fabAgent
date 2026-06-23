@@ -117,7 +117,7 @@ def render_nav():
         '<div class="fab-nav">'
         f'<a href="?view=triage" target="_self" class="{t_active}">Tier 0 트리아지</a>'
         f'<a href="?view=analysis" target="_self" class="{a_active}">심층 분석 (4-Tier)</a>'
-        f'<a href="?view=maintenance" target="_self" class="{m_active}">예지보전</a>'
+        f'<a href="?view=maintenance" target="_self" class="{m_active}">예측 기반 정비</a>'
         f'<a href="?view=audit" target="_self" class="{g_active}">감사 로그</a>'
         '</div>'
     )
