@@ -11,11 +11,27 @@ decision: approved | held | rejected
 surface: analysis(4-Tier) | triage | maintenance
 """
 import json
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "audit.db"
+
+
+def make_work_order(target_id: str, date: datetime | None = None) -> str:
+    """대상 ID로 작업지시서 번호 생성 (알람·incident 모두 안전)
+
+    A1 -> W-YYYYMMDD-A1, TRIAGE-0001 -> W-YYYYMMDD-TRIAGE0001
+    """
+    d = (date or datetime.now()).strftime("%Y%m%d")
+    suffix = re.sub(r"[^A-Za-z0-9]", "", target_id) or "NA"
+    return f"W-{d}-{suffix}"
+
+
+def surface_for(target_id: str) -> str:
+    """대상 ID로 결정 surface 추론 (incident면 triage 출처)"""
+    return "triage" if target_id.startswith("TRIAGE-") else "analysis"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS decisions (
