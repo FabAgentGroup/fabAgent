@@ -64,7 +64,7 @@ SYSTEM_PROMPT = """당신은 반도체 공정 대응 권고 전문가입니다.
 - lookup_incident_history(symptom): 과거 incident의 실제 resolution (소요시간·yield 회복률 포함)
 - get_pm_history(equipment_id): 장비 PM overdue 여부 - 즉시 PM 필요성 판단
 - check_pm_schedule(equipment_id): 가용 PM 윈도우 - immediate 조치의 실행 가능 시점 확보
-- predict_tool_rul(equipment_id): 소모품 잔여수명(RUL) + 예지보전 권고 - 반응형이 아닌 예측형 PM 시점 결정
+- predict_tool_rul(equipment_id): 소모품 잔여수명(RUL) + 예측 기반 정비 권고 - 반응형이 아닌 예측형 PM 시점 결정
 
 [전략]
 - 도구를 자율 호출해 근거 SOP·과거 해결책·PM 가용성을 확인하세요

@@ -1,7 +1,7 @@
 """RUL(잔여수명) 예측 엔진 - 반응형에서 예측형으로
 
 지금까지 시스템은 이상이 '발생한 뒤' 탐지·분석했다(반응형). RUL 엔진은 소모품
-마모 추세를 외삽해 '언제 한계에 도달할지'를 미리 알려 예지보전(PM)을 가능케 한다
+마모 추세를 외삽해 '언제 한계에 도달할지'를 미리 알려 예측 기반 정비(PM)을 가능케 한다
 
 방법: 최근 사용량 이력으로 lot당 열화율을 추정하고 수명한계까지 외삽
   RUL(lot) = (life_limit - 현재사용량) / 열화율
@@ -98,7 +98,7 @@ def assess(usage_histories: dict[str, list[float]]) -> dict:
 
 
 def recommend_pm(assessment: dict, pm_windows: list[str], lots_per_day: float = 6.0) -> dict:
-    """예지보전 권고 - 예측 breach 전에 PM 윈도우를 잡는다
+    """예측 기반 정비 권고 - 예측 breach 전에 PM 윈도우를 잡는다
 
     pm_windows: 가용 PM 윈도우 (가까운 순)
     lots_per_day: 일 처리 lot 수 (RUL lot을 일수로 환산)
@@ -135,7 +135,7 @@ def recommend_pm(assessment: dict, pm_windows: list[str], lots_per_day: float = 
 
 
 def assess_equipment(equipment_id: str) -> dict:
-    """장비 ID로 현재 소모품 스냅샷을 받아 RUL 평가 + 예지보전 권고
+    """장비 ID로 현재 소모품 스냅샷을 받아 RUL 평가 + 예측 기반 정비 권고
 
     PM 윈도우는 equipment 도구에서 조회한다. 알 수 없는 장비면 status=unknown
     """
