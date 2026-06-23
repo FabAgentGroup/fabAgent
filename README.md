@@ -1,16 +1,3 @@
----
-title: FabAgent
-emoji: 🟦
-colorFrom: blue
-colorTo: indigo
-sdk: streamlit
-sdk_version: 1.36.0
-app_file: app.py
-pinned: false
-license: mit
-short_description: 반도체 공정 이상의 탐지·원인·영향·대응을 잇는 멀티 에이전트 운영 플랫폼
----
-
 # FabAgent
 
 반도체 공정 이상의 **탐지 → 원인 분석 → 영향 평가 → 대응 권고**를 하나의 멀티 에이전트
