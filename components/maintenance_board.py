@@ -1,6 +1,6 @@
-"""예지보전 보드 (반응형에서 예측형으로)
+"""예측 기반 정비 보드 (반응형에서 예측형으로)
 
-CMP 장비별 소모품 잔여수명(RUL)과 예지보전 권고를 보여준다. 운영자는 고장 후가
+CMP 장비별 소모품 잔여수명(RUL)과 예측 기반 정비 권고를 보여준다. 운영자는 고장 후가
 아니라 마모 추세로 'PM을 언제 넣을지' 미리 결정한다
 
 데이터는 RUL 엔진(결정론)이라 LLM 호출 없이 즉시 렌더
@@ -86,7 +86,7 @@ def _render_equipment(equipment_id: str):
     rec_html = ""
     if pm:
         rec_html = (
-            f'<div class="pm-rec"><b>예지보전 권고</b>  {pm.get("reason", "")}'
+            f'<div class="pm-rec"><b>예측 기반 정비 권고</b>  {pm.get("reason", "")}'
             f'<div class="pm-rec-win">권고 PM 윈도우  {pm.get("recommended_window", "-")}</div></div>'
         )
 
@@ -108,7 +108,7 @@ def _render_equipment(equipment_id: str):
 def render_maintenance_board():
     st.html(_STYLE)
     st.markdown(
-        '<h1 class="fab-main-title">예지보전 보드</h1>'
+        '<h1 class="fab-main-title">예측 기반 정비 보드</h1>'
         '<div class="fab-main-sub"><span>소모품 잔여수명(RUL) 예측</span>'
         '<span class="sep">·</span><span>반응형에서 예측형 PM으로</span></div>',
         unsafe_allow_html=True,

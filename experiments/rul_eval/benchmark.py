@@ -1,10 +1,10 @@
-"""D14: RUL 예측 정확도 + 예지보전 vs 캘린더 PM
+"""D14: RUL 예측 정확도 + 예측 기반 정비 vs 캘린더 PM
 
 반응형에서 예측형으로의 전환 가치를 정량 평가한다
 - RUL 예측 정확도: MAE/RMSE + 프로그노스틱 표준 지표 α-λ accuracy
-- 예지보전(predictive PM) vs 캘린더 PM(현 fab 관행)의 트레이드오프
+- 예측 기반 정비(predictive PM) vs 캘린더 PM(현 fab 관행)의 트레이드오프
   캘린더 PM은 고정 주기라 '미계획 breach(너무 늦음)'와 '낭비 수명(너무 이름)' 중
-  하나를 택해야 한다. 예지보전은 두 축 모두 낮출 수 있다
+  하나를 택해야 한다. 예측 기반 정비는 두 축 모두 낮출 수 있다
 
 수명한계·열화율은 PHM 2016 CMP 실데이터에서 도출, RtF 궤적은 거기 보정된 합성
 (data/phm2016/consumables.py). seed 고정으로 100% 재현
@@ -32,7 +32,7 @@ CHARTS.mkdir(exist_ok=True)
 N_TRAJ_PER_CONSUMABLE = 50
 ALPHA = 0.2          # α-λ accuracy: |pred-true|/true <= 0.2
 MIN_HISTORY = 3      # 예측 시작 최소 이력 lot
-PRED_MARGIN = 2.0    # 예지보전 트리거: 예측 RUL <= 2 lot
+PRED_MARGIN = 2.0    # 예측 기반 정비 트리거: 예측 RUL <= 2 lot
 
 
 def _all_trajectories():
@@ -79,10 +79,10 @@ def eval_accuracy(trajectories):
 
 
 def eval_pm_policies(trajectories):
-    """예지보전 vs 캘린더 PM의 (breach율, 평균 낭비수명)
+    """예측 기반 정비 vs 캘린더 PM의 (breach율, 평균 낭비수명)
 
     캘린더 PM은 소모품별 평균수명 × 안전계수를 고정 주기로 사용(현실적 운영)
-    그래도 lot별 수명 분산 탓에 breach 또는 낭비가 남는다. 예지보전은 궤적마다 적응
+    그래도 lot별 수명 분산 탓에 breach 또는 낭비가 남는다. 예측 기반 정비는 궤적마다 적응
     """
     import statistics
     n = len(trajectories)
@@ -93,7 +93,7 @@ def eval_pm_policies(trajectories):
         lives_by_c.setdefault(cid, []).append(len(traj))
     mean_life_by_c = {c: statistics.mean(v) for c, v in lives_by_c.items()}
 
-    # 예지보전: 예측 RUL <= margin 되는 첫 시점에 PM
+    # 예측 기반 정비: 예측 RUL <= margin 되는 첫 시점에 PM
     pred_breaches = pred_wasted = 0
     for cid, traj in trajectories:
         T = len(traj)
@@ -160,13 +160,13 @@ def chart_pm_tradeoff(pm, path):
                     fontsize=8, color="#3b82f6", xytext=(3, 3), textcoords="offset points")
     p = pm["predictive"]
     ax.scatter([p["avg_wasted"]], [p["breach_rate"] * 100], color="#10b981", s=140,
-               zorder=5, label="예지보전 (RUL 기반)", edgecolors="white", linewidths=1.5)
-    ax.annotate("예지보전", (p["avg_wasted"], p["breach_rate"] * 100),
+               zorder=5, label="예측 기반 정비 (RUL 기반)", edgecolors="white", linewidths=1.5)
+    ax.annotate("예측 기반 정비", (p["avg_wasted"], p["breach_rate"] * 100),
                 fontsize=10, fontweight="bold", color="#10b981",
                 xytext=(8, 6), textcoords="offset points")
     ax.set_xlabel("평균 낭비 수명 (lot, 낮을수록 좋음)")
     ax.set_ylabel("미계획 breach율 (%, 낮을수록 좋음)")
-    ax.set_title("예지보전이 캘린더 PM 트레이드오프 곡선 아래에 위치", fontweight="bold")
+    ax.set_title("예측 기반 정비가 캘린더 PM 트레이드오프 곡선 아래에 위치", fontweight="bold")
     ax.legend()
     fig.tight_layout()
     fig.savefig(path, dpi=130)
@@ -183,7 +183,7 @@ def write_results(acc, pm):
     waste_cut = safe_cal["avg_wasted"] - p["avg_wasted"]
 
     lines = []
-    lines.append("# D14: RUL 예측 + 예지보전 vs 캘린더 PM")
+    lines.append("# D14: RUL 예측 + 예측 기반 정비 vs 캘린더 PM")
     lines.append("")
     lines.append("반응형에서 예측형으로의 전환 가치를 정량 평가합니다. 소모품 마모 추세를")
     lines.append("외삽해 잔여수명(RUL)을 예측하고, 고정 주기 캘린더 PM(현 fab 관행) 대비")
@@ -194,7 +194,7 @@ def write_results(acc, pm):
     lines.append(f"- 소모품 3종(연마 패드·드레서·멤브레인) × RtF 궤적 {N_TRAJ_PER_CONSUMABLE}개 = "
                  f"{3*N_TRAJ_PER_CONSUMABLE}개")
     lines.append("- 수명한계·MRR 열화율은 PHM 2016 CMP 실데이터에서 도출, 궤적은 거기 보정된 합성")
-    lines.append(f"- 예지보전 트리거: 예측 RUL ≤ {PRED_MARGIN:.0f} lot, 캘린더 PM: 고정 주기 스윕")
+    lines.append(f"- 예측 기반 정비 트리거: 예측 RUL ≤ {PRED_MARGIN:.0f} lot, 캘린더 PM: 고정 주기 스윕")
     lines.append("")
     lines.append("## 1. RUL 예측 정확도")
     lines.append("")
@@ -210,11 +210,11 @@ def write_results(acc, pm):
     lines.append("")
     lines.append("생애 후반으로 갈수록 오차가 줄어, breach 임박 시점에서 정확도가 가장 높습니다.")
     lines.append("")
-    lines.append("## 2. 예지보전 vs 캘린더 PM")
+    lines.append("## 2. 예측 기반 정비 vs 캘린더 PM")
     lines.append("")
     lines.append("| 정책 | 미계획 breach율 | 평균 낭비 수명 |")
     lines.append("|---|---|---|")
-    lines.append(f"| **예지보전 (RUL 기반)** | **{p['breach_rate']:.0%}** | **{p['avg_wasted']:.1f} lot** |")
+    lines.append(f"| **예측 기반 정비 (RUL 기반)** | **{p['breach_rate']:.0%}** | **{p['avg_wasted']:.1f} lot** |")
     for c in pm["calendar"]:
         lines.append(f"| 캘린더 PM (주기 x{c['safety']:.1f}) | {c['breach_rate']:.0%} | {c['avg_wasted']:.1f} lot |")
     lines.append("")
@@ -225,7 +225,7 @@ def write_results(acc, pm):
     lines.append(f"- RUL을 MAE {acc['mae']:.2f} lot, α-λ {acc['alpha_acc']:.0%}로 예측 "
                  f"(편향 {acc['bias']:+.2f} lot으로 약간 보수적, breach보다 조기 PM 선호)")
     lines.append(f"- 캘린더 PM은 breach를 줄이려면 수명을 낭비하고, 수명을 살리려면 breach가 늘어남")
-    lines.append(f"- 예지보전은 breach {p['breach_rate']:.0%} · 낭비 {p['avg_wasted']:.1f}lot으로 "
+    lines.append(f"- 예측 기반 정비는 breach {p['breach_rate']:.0%} · 낭비 {p['avg_wasted']:.1f}lot으로 "
                  f"트레이드오프 곡선 아래에 위치 (동일 안전수준 캘린더 대비 낭비 수명 {waste_cut:.1f}lot 절감)")
     lines.append("- RUL·열화율·신뢰구간을 모두 노출해 PM 시점 결정을 감사 가능")
     (HERE / "results.md").write_text("\n".join(lines), encoding="utf-8")
@@ -241,7 +241,7 @@ def main():
     p = pm["predictive"]
     print(f"궤적 {len(trajectories)}개, 예측 시점 {acc['n_pred']:,}")
     print(f"RUL MAE {acc['mae']:.2f}lot, RMSE {acc['rmse']:.2f}, α-λ {acc['alpha_acc']:.0%}, 편향 {acc['bias']:+.2f}")
-    print(f"예지보전: breach {p['breach_rate']:.0%}, 낭비수명 {p['avg_wasted']:.1f}lot")
+    print(f"예측 기반 정비: breach {p['breach_rate']:.0%}, 낭비수명 {p['avg_wasted']:.1f}lot")
     print("-> results.md + charts 작성 완료")
 
 

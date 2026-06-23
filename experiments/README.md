@@ -19,7 +19,7 @@
 | **D11** | Conductor (Plan-and-Execute) vs Autonomous | 4 LLM call vs 10 LLM call | **Conductor 채택** (속도·비용 우위, 품질 동등) | [conductor_vs_autonomous/results.md](conductor_vs_autonomous/results.md) |
 | **D12** | Tier 0 트리아지 + 커몬낼리티 엔진 | 알람 폭주 압축 · 커몬낼리티 vs sigma baseline | **압축 132x · nuisance 98% 억제 · commonality hit@1 3/3** | [triage_eval/results.md](triage_eval/results.md) |
 | **D13** | 리스크 정량 디스포지션 | 비용엔진 vs naive(항상 보류/진행/폐기) | **oracle 84% 일치 · 이론상한 +2.0% · naive 대비 최대 $49M 절감** | [disposition_eval/results.md](disposition_eval/results.md) |
-| **D14** | 예측형 RUL (PHM 2016) | 예지보전 vs 캘린더 PM | **RUL MAE 1.43 lot · α-λ 92% · breach 0%로 낭비수명 최소** | [rul_eval/results.md](rul_eval/results.md) |
+| **D14** | 예측형 RUL (PHM 2016) | 예측 기반 정비 vs 캘린더 PM | **RUL MAE 1.43 lot · α-λ 92% · breach 0%로 낭비수명 최소** | [rul_eval/results.md](rul_eval/results.md) |
 | **D15** | 신뢰도 캘리브레이션 | raw vs isotonic 보정 ECE | **ECE 0.427 → 0.001 (-100%)** | [calibration_eval/results.md](calibration_eval/results.md) |
 | **D16** | 운영자 결정 자가학습 루프 | 인시던트 기록 전/후 retrieval | **hit@3 0% → 80% (운영자 지식 즉시 반영)** | [learning_eval/results.md](learning_eval/results.md) |
 
